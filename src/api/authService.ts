@@ -60,6 +60,21 @@ export const authService = {
     return null;
   },
 
+  async getCurrentUserFromAPI(): Promise<User | null> {
+    try {
+      const response = await apiClient.get<User>('/users/me');
+      if (response.data) {
+        // Guardar en AsyncStorage para uso posterior
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(response.data));
+        return response.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch current user:', error);
+      return null;
+    }
+  },
+
   async isAuthenticated(): Promise<boolean> {
     const token = await apiClient.getAuthToken();
     return !!token;

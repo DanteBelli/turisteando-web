@@ -27,7 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.logoText}>Turisteando</Text>
-        <Text style={styles.welcmeText}>Bienvenido, {user?.name || 'Usuario'}</Text>
+        <Text style={styles.welcmeText}>Bienvenido, {user?.name || user?.email || 'Usuario'}</Text>
       </View>
 
       {/* Menu Items */}

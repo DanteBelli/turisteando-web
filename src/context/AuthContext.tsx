@@ -30,16 +30,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const token = await authService.getAuthToken();
       if (token) {
         setToken(token);
-        // Load user data if available
-        const currentUser = await authService.getCurrentUser();
+        // Fetch user data from API
+        const currentUser = await authService.getCurrentUserFromAPI();
         if (currentUser) {
           setUser(currentUser);
         } else {
-          // If no user data but has token, set a placeholder user
+          // If no user data, set a placeholder user
           setUser({
             id: 0,
             email: '',
-            name: 'User',
+            name: 'Usuario',
             last_name: '',
             celular: 0,
             tipo_user: 1,
@@ -65,17 +65,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoading(true);
       setError(null);
       const response = await authService.login(credentials);
-      // Backend returns {token: string}, not {token, user}
-      // We set a minimal user object since we authenticated successfully
-      setUser({
-        id: 0,
-        email: credentials.email,
-        name: '',
-        last_name: '',
-        celular: 0,
-        tipo_user: 1,
-      } as User);
       setToken(response.token);
+      
+      // Fetch user data from API
+      const userData = await authService.getCurrentUserFromAPI();
+      if (userData) {
+        setUser(userData);
+      } else {
+        // Fallback if API call fails
+        setUser({
+          id: 0,
+          email: credentials.email,
+          name: 'Usuario',
+          last_name: '',
+          celular: 0,
+          tipo_user: 1,
+        } as User);
+      }
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || err.message || 'Login failed';
       setError(errorMessage);
