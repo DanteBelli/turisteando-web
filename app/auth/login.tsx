@@ -14,7 +14,7 @@ import {
 import { useAuth } from '@/src/context/AuthContext';
 
 export default function LoginScreen() {
-  const { login, isLoading, error, clearError } = useAuth();
+  const { login, register, isLoading, error, clearError } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
   
   // Login fields
@@ -67,14 +67,19 @@ export default function LoginScreen() {
 
     try {
       clearError();
-      // Note: Password will be auto-set to a temporary value after registration
-      // You may want to update the register endpoint to return a token
-      Alert.alert('Éxito', 'Usuario creado. Por favor inicia sesión');
-      setIsRegistering(false);
-      handleLogin();
+      await register({
+        name: registerName,
+        last_name: registerLastName,
+        email: registerEmail,
+        password: registerPassword,
+        celular: parseInt(registerCelular),
+      });
+      // If successful, the user is automatically logged in by the authService
+      // Navigation will happen automatically in AuthContext
+      Alert.alert('Éxito', 'Cuenta creada correctamente');
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || err.message || 'Error al registrar';
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error de registro', errorMessage);
     }
   };
 

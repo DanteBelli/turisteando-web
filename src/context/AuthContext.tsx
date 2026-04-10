@@ -96,10 +96,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoading(true);
       setError(null);
       const response = await authService.register(userData);
-      setUser(response.user);
-      setToken(response.token);
+      
+      // authService.register automatically logs in after registration
+      // Set token from response
+      if (response.token) {
+        setToken(response.token);
+      }
+      
+      // Fetch user data from API
+      const user = await authService.getCurrentUserFromAPI();
+      if (user) {
+        setUser(user);
+      } else {
+        // Fallback if API call fails
+        setUser({
+          id: 0,
+          email: userData.email,
+          name: userData.name,
+          last_name: userData.last_name,
+          celular: userData.celular,
+          tipo_user: 1,
+        } as User);
+      }
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Registration failed';
+      const errorMessage = err.response?.data?.error || err.response?.data?.message || err.message || 'Error durante el registro';
       setError(errorMessage);
       throw err;
     } finally {
