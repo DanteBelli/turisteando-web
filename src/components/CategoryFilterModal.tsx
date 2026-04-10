@@ -20,12 +20,16 @@ interface CategoryFilterModalProps {
   visible: boolean;
   onClose: () => void;
   onApplyFilter: (selectedCategories: number[]) => void;
+  onClearFilter: () => void;
+  selectedCategoryIds: number[];
 }
 
 export const CategoryFilterModal: React.FC<CategoryFilterModalProps> = ({
   visible,
   onClose,
   onApplyFilter,
+  onClearFilter,
+  selectedCategoryIds,
 }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
@@ -34,8 +38,10 @@ export const CategoryFilterModal: React.FC<CategoryFilterModalProps> = ({
   useEffect(() => {
     if (visible) {
       fetchCategories();
+      // Inicializar con los filtros actuales
+      setSelectedCategories(selectedCategoryIds);
     }
-  }, [visible]);
+  }, [visible, selectedCategoryIds]);
 
   const fetchCategories = async () => {
     try {
@@ -67,6 +73,8 @@ export const CategoryFilterModal: React.FC<CategoryFilterModalProps> = ({
 
   const handleClearFilter = () => {
     setSelectedCategories([]);
+    onClearFilter();
+    onClose();
   };
 
   return (

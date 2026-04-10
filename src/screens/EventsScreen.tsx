@@ -39,20 +39,61 @@ export const EventsScreen: React.FC = () => {
       setShowFilterModal(false);
       setSelectedCategoryIds(categoryIds);
       
+      let eventsData;
       if (categoryIds.length === 0) {
         // If no categories selected, fetch all events
-        const eventsData = await eventService.getAllWithPlaces();
-        setEvents(eventsData);
+        eventsData = await eventService.getAllWithPlaces();
       } else {
         // Fetch events filtered by selected categories
-        const filteredEvents = await eventService.getEventsByCategories(categoryIds);
-        setEvents(filteredEvents);
+        eventsData = await eventService.getEventsByCategories(categoryIds);
       }
       
+      // Extract latitude and longitude from place (IMPORTANT: same as initial load)
+      const eventsWithCoordinates = eventsData.map((event: EventWithPlace) => {
+        const lat = event.place?.latitude || event.latitude;
+        const lng = event.place?.longitude || event.longitude;
+        return {
+          ...event,
+          latitude: lat,
+          longitude: lng
+        };
+      });
+      
+      setEvents(eventsWithCoordinates);
       setLoading(false);
     } catch (err) {
       console.error('Error applying filter:', err);
       setError('Error al filtrar eventos');
+      setLoading(false);
+    }
+  };
+
+  // Handle clearing filters
+  const handleClearFilter = async () => {
+    try {
+      setLoading(true);
+      setShowFilterModal(false);
+      setSelectedCategoryIds([]);
+      
+      // Reload all events
+      const eventsData = await eventService.getAllWithPlaces();
+      
+      // Extract coordinates
+      const eventsWithCoordinates = eventsData.map((event: EventWithPlace) => {
+        const lat = event.place?.latitude || event.latitude;
+        const lng = event.place?.longitude || event.longitude;
+        return {
+          ...event,
+          latitude: lat,
+          longitude: lng
+        };
+      });
+      
+      setEvents(eventsWithCoordinates);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error clearing filters:', err);
+      setError('Error al cargar los eventos');
       setLoading(false);
     }
   };
@@ -331,6 +372,8 @@ export const EventsScreen: React.FC = () => {
         visible={showFilterModal}
         onClose={() => setShowFilterModal(false)}
         onApplyFilter={handleApplyFilter}
+        onClearFilter={handleClearFilter}
+        selectedCategoryIds={selectedCategoryIds}
       />
     </View>
   );
