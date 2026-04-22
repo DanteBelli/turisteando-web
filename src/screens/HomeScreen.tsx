@@ -1,6 +1,8 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { eventService } from '../api/services';
+import { Event } from '../types';
 
 interface HomeScreenProps {
   onNavigate?: (screenName: string) => void;
@@ -8,25 +10,28 @@ interface HomeScreenProps {
 
 export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const { user } = useAuth();
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
 
-  const stats = [
-    { label: 'Eventos', value: '12', icon: '📅' },
-    { label: 'Favoritos', value: '5', icon: '❤️' },
-    { label: 'Asistencias', value: '8', icon: '✓' },
-    { label: 'Amigos', value: '23', icon: '👥' }
-  ];
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const data = await eventService.getAll(1, 100);
+        setEvents(data.data || []);
+      } catch (err) {
+        console.error('Error loading events:', err);
+      } finally {
+        setLoadingEvents(false);
+      }
+    };
+    fetchEvents();
+  }, []);
 
   const quickActions = [
     { id: 'events', label: 'Explorar Eventos', icon: '🔍', color: '#28A745' },
     { id: 'favorites', label: 'Mis Favoritos', icon: '❤️', color: '#FF6B6B' },
     { id: 'messages', label: 'Mensajes', icon: '💬', color: '#4ECDC4' },
-    { id: 'profile', label: 'Mi Perfil', icon: '👤', color: '#FFD93D' }
-  ];
-
-  const upcomingEvents = [
-    { id: 1, name: 'Cafe Buenos Aires', date: '15 Mar', icon: '☕' },
-    { id: 2, name: 'Tango Night', date: '20 Mar', icon: '🎭' },
-    { id: 3, name: 'Festival Gastronómico', date: '25 Mar', icon: '🍽️' }
+    { id: 'profile', label: 'Mi Perfil', icon: '👤', color: '#FFD93D' },
   ];
 
   const handleQuickAction = (actionId: string) => {
@@ -35,13 +40,28 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     }
   };
 
+  const formatEventDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const stats = [
+    { label: 'Eventos', value: loadingEvents ? '...' : String(events.length), icon: '📅' },
+    { label: 'Favoritos', value: '0', icon: '❤️' },
+    { label: 'Asistencias', value: '0', icon: '✓' },
+  ];
+
   return (
     <ScrollView style={styles.container}>
       {/* Welcome Header */}
       <View style={styles.welcomeSection}>
         <Text style={styles.greeting}>Bienvenido de nuevo! 👋</Text>
-        <Text style={styles.userName}>{user?.nombre} {user?.apellido}</Text>
-        <Text style={styles.subtitle}>Descubre nuevas experiencias en Buenos Aires</Text>
+        <Text style={styles.userName}>{user?.name} {user?.last_name}</Text>
+        <Text style={styles.subtitle}>Descubre nuevas experiencias</Text>
       </View>
 
       {/* Statistics */}
@@ -81,22 +101,33 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </TouchableOpacity>
         </View>
 
-        {upcomingEvents.map((event) => (
-          <TouchableOpacity
-            key={event.id}
-            style={styles.upcomingEventItem}
-            onPress={() => handleQuickAction('events')}
-          >
-            <View style={styles.eventInfo}>
-              <Text style={styles.eventIcon}>{event.icon}</Text>
-              <View style={styles.eventDetails}>
-                <Text style={styles.eventName}>{event.name}</Text>
-                <Text style={styles.eventDate}>📅 {event.date}</Text>
+        {loadingEvents ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#28A745" />
+            <Text style={styles.loadingText}>Cargando eventos...</Text>
+          </View>
+        ) : events.length === 0 ? (
+          <View style={styles.emptyEvents}>
+            <Text style={styles.emptyEventsText}>No hay eventos disponibles por el momento.</Text>
+          </View>
+        ) : (
+          events.slice(0, 5).map((event) => (
+            <TouchableOpacity
+              key={event.id}
+              style={styles.upcomingEventItem}
+              onPress={() => handleQuickAction('events')}
+            >
+              <View style={styles.eventInfo}>
+                <Text style={styles.eventIcon}>📍</Text>
+                <View style={styles.eventDetails}>
+                  <Text style={styles.eventName} numberOfLines={1}>{event.title}</Text>
+                  <Text style={styles.eventDate}>📅 {formatEventDate(event.event_date as any)}</Text>
+                </View>
               </View>
-            </View>
-            <Text style={styles.arrow}>›</Text>
-          </TouchableOpacity>
-        ))}
+              <Text style={styles.arrow}>›</Text>
+            </TouchableOpacity>
+          ))
+        )}
       </View>
 
       {/* Tips Section */}
@@ -114,20 +145,18 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         <View style={styles.tipCard}>
           <Text style={styles.tipIcon}>🔔</Text>
           <View style={styles.tipContent}>
-            <Text style={styles.tipTitle}>Recibe notificaciones</Text>
+            <Text style={styles.tipTitle}>No te pierdas nada</Text>
             <Text style={styles.tipText}>
-              Activa notificaciones para no perderte ningún evento.
+              Revisá los eventos disponibles y confirmá tu asistencia.
             </Text>
           </View>
         </View>
       </View>
 
-      {/* Footer Padding */}
       <View style={{ height: 20 }} />
     </ScrollView>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -239,6 +268,28 @@ const styles = StyleSheet.create({
     color: '#28A745',
     fontWeight: '600',
   },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  loadingText: {
+    color: '#999',
+    fontSize: 14,
+  },
+  emptyEvents: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyEventsText: {
+    color: '#999',
+    fontSize: 14,
+    textAlign: 'center',
+  },
   upcomingEventItem: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -259,7 +310,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eventIcon: {
-    fontSize: 28,
+    fontSize: 24,
     marginRight: 12,
   },
   eventDetails: {
