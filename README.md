@@ -291,3 +291,9 @@ Para preguntas o reportar issues: [tu contacto]
 ## Licencia
 
 MIT
+
+
+
+agregados instalacion
+npx expo install expo-image-picker //para cargar imagen
+npx expo install @react-native-community/datetimepicker //seleccionar fecha
