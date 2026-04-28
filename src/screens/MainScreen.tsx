@@ -8,6 +8,7 @@ import FavoritesScreen from './FavoritesScreen';
 import HomeScreen from './HomeScreen';
 import { useAuth } from '../context/AuthContext';
 import { Loading } from '../components/Common';
+import CreateEventScreen from '../screens/CreateEventScreen';
 
 export const MainScreen: React.FC = () => {
   const { isLoading } = useAuth();
@@ -18,20 +19,27 @@ export const MainScreen: React.FC = () => {
   }
 
   const renderContent = () => {
-    switch (currentScreen) {
-      case 'events':
-        return <EventsScreen />;
-      case 'profile':
-        return <ProfileScreen />;
-      case 'favorites':
-        return <FavoritesScreen />;
-      case 'messages':
-        return <ChatScreen />;
-      case 'home':
-      default:
-        return <HomeScreen onNavigate={setCurrentScreen} />;
-    }
-  };
+  switch (currentScreen) {
+    case 'events':
+      return <EventsScreen />;
+
+    case 'profile':
+      return <ProfileScreen />;
+
+    case 'favorites':
+      return <FavoritesScreen />;
+
+    case 'messages':
+      return <ChatScreen />;
+
+    case 'create-event':
+      return <CreateEventScreen />;
+
+    case 'home':
+    default:
+      return <HomeScreen onNavigate={setCurrentScreen} />;
+  }
+};
 
   return (
     <View style={styles.container}>
