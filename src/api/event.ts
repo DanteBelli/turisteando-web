@@ -21,6 +21,17 @@ export interface CreatePlacePayload {
   description?: string;
 }
 
+export interface Place {
+  id: number;
+  name: string;
+  latitude?: number;
+  longitude?: number;
+  city_id: number;
+  country_id: number;
+  description?: string;
+  address?: string;
+}
+
 export const createEvent = async (
   data: CreateEventPayload,
   token: string
@@ -54,5 +65,109 @@ export const createPlace = async (
   } catch (error) {
     console.error('Error creating place:', error);
     throw error;
+  }
+};
+
+export const getPlaces = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/places`);
+    console.log('📍 Places API response:', response.data);
+    
+    // Si la respuesta es un array directamente
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+    
+    // Si la respuesta tiene estructura { data: [...] }
+    if (response.data && Array.isArray(response.data.data)) {
+      return response.data.data;
+    }
+    
+    // Si la respuesta tiene estructura { places: [...] }
+    if (response.data && Array.isArray(response.data.places)) {
+      return response.data.places;
+    }
+    
+    console.warn('Estructura de respuesta inesperada:', response.data);
+    return [];
+  } catch (error) {
+    console.error('Error fetching places:', error);
+    return [];
+  }
+};
+
+// FAVORITES
+export const addEventToFavorites = async (eventId: number, token: string) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/favorites/${eventId}`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response;
+  } catch (error) {
+    console.error('Error adding event to favorites:', error);
+    throw error;
+  }
+};
+
+export const removeEventFromFavorites = async (eventId: number, token: string) => {
+  try {
+    const response = await axios.delete(
+      `${API_BASE_URL}/favorites/${eventId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response;
+  } catch (error) {
+    console.error('Error removing event from favorites:', error);
+    throw error;
+  }
+};
+
+export const isEventFavorite = async (eventId: number, token: string) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/favorites/${eventId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data.is_favorite;
+  } catch (error) {
+    console.error('Error checking if event is favorite:', error);
+    return false;
+  }
+};
+
+export const getUserFavorites = async (token: string) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/me/favorites`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    
+    if (Array.isArray(response.data.favorites)) {
+      return response.data.favorites;
+    }
+    return [];
+  } catch (error) {
+    console.error('Error fetching user favorites:', error);
+    return [];
   }
 };

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { addEventToFavorites, removeEventFromFavorites, isEventFavorite } from '../api/event';
 
 interface Event {
   id: number;
@@ -20,9 +21,56 @@ interface EventDetailScreenProps {
 }
 
 export default function EventDetailScreen({ event, onClose }: EventDetailScreenProps) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [isFavorite, setIsFavorite] = useState(false);
   const [isAttending, setIsAttending] = useState(false);
+  const [isLoadingFavorite, setIsLoadingFavorite] = useState(false);
+
+  // Cargar estado de favorito cuando se abre el evento
+  useEffect(() => {
+    if (event && user && token) {
+      checkIfEventIsFavorite();
+    }
+  }, [event, user, token]);
+
+  const checkIfEventIsFavorite = async () => {
+    if (!event || !token) return;
+    
+    try {
+      const favorite = await isEventFavorite(event.id, token);
+      setIsFavorite(favorite);
+    } catch (error) {
+      console.error('Error checking favorite status:', error);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!event || !user || !token) {
+      Alert.alert('Error', 'Debes estar autenticado');
+      return;
+    }
+
+    setIsLoadingFavorite(true);
+
+    try {
+      if (isFavorite) {
+        // Remover de favoritos
+        await removeEventFromFavorites(event.id, token);
+        setIsFavorite(false);
+        console.log('✅ Evento eliminado de favoritos');
+      } else {
+        // Agregar a favoritos
+        await addEventToFavorites(event.id, token);
+        setIsFavorite(true);
+        console.log('✅ Evento agregado a favoritos');
+      }
+    } catch (error) {
+      console.error('❌ Error al actualizar favorito:', error);
+      Alert.alert('Error', 'No se pudo actualizar los favoritos');
+    } finally {
+      setIsLoadingFavorite(false);
+    }
+  };
 
   if (!event) {
     return (
@@ -99,11 +147,16 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
               styles.favoriteButton,
               isFavorite && styles.favoriteButtonActive
             ]}
-            onPress={() => setIsFavorite(!isFavorite)}
+            onPress={handleToggleFavorite}
+            disabled={isLoadingFavorite}
           >
-            <Text style={styles.favoriteButtonText}>
-              {isFavorite ? '❤️ Favorito' : '🤍 Agregar a favoritos'}
-            </Text>
+            {isLoadingFavorite ? (
+              <ActivityIndicator size="small" color={isFavorite ? '#fff' : '#28A745'} />
+            ) : (
+              <Text style={[styles.favoriteButtonText, isFavorite && { color: '#fff' }]}>
+                {isFavorite ? '❤️ Favorito' : '🤍 Agregar a favoritos'}
+              </Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -132,8 +185,8 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
             <View style={styles.userSection}>
               <Text style={styles.sectionTitle}>Tu perfil</Text>
               <View style={styles.userCard}>
-                <Text style={styles.userName}>{user.nombre} {user.apellido}</Text>
-                <Text style={styles.userEmail}>{user.correo}</Text>
+                <Text style={styles.userName}>{user.name} {user.last_name}</Text>
+                <Text style={styles.userEmail}>{user.email}</Text>
               </View>
             </View>
           )}

@@ -16,7 +16,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
     { id: 'favorites', label: 'Favoritos', icon: '❤️' },
     { id: 'messages', label: 'Mensajes', icon: '💬' },
     { id: 'profile', label: 'Perfil', icon: '👤' },
-     ...(user?.tipo_user === 1
+     ...(user?.tipo_user === 4
     ? [{ id: 'create-event', label: 'Crear Evento', icon: '➕' }]
     : []),
   ];
