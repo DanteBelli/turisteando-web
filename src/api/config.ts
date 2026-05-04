@@ -1,9 +1,25 @@
 // API Configuration
-// Change this to match your backend server URL
-// For local development: http://localhost:8080
-// For production: your actual API URL
+// Use EXPO_PUBLIC_API_URL to override the backend host.
+// Example in .env or .env.local:
+// EXPO_PUBLIC_API_URL=http://10.200.12.21:8080
+// EXPO_PUBLIC_API_URL=http://localhost:8080
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080';
+const getAPIBaseURL = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `http://${hostname}:8080`;
+    }
+  }
+
+  return 'http://localhost:8080';
+};
+
+export const API_BASE_URL = getAPIBaseURL();
 
 // Storage keys
 export const STORAGE_KEYS = {

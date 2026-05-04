@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
-import { createEvent, createPlace, getPlaces, Place } from '../api/event';
+import { createEvent, createPlace, getCategories, getPlaces, Place, Category } from '../api/event';
+import { uploadEventImage } from '../api/imageUpload';
 
 declare global {
   interface Window {
@@ -37,6 +38,8 @@ export default function CreateEventScreen() {
   const [selectedLocation, setSelectedLocation] = useState<{ name: string; lat: number; lng: number; placeId?: number } | null>(null);
   const [errors, setErrors] = useState<{ [key: string]: boolean }>({});
   const [places, setPlaces] = useState<Place[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   
   // Estado para modal de nuevo place
@@ -240,6 +243,24 @@ export default function CreateEventScreen() {
     }
   };
 
+  const loadCategories = async () => {
+    const loadedCategories = await getCategories();
+    setCategories(loadedCategories);
+  };
+
+  const toggleCategory = (categoryId: number) => {
+    setSelectedCategoryIds((prev) => {
+      if (prev.includes(categoryId)) {
+        return prev.filter((id) => id !== categoryId);
+      }
+      return [...prev, categoryId];
+    });
+  };
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
   const handleConfirmPlace = () => {
     // Validar que se ingresaron nombre y descripción
     const errors: { name?: boolean; description?: boolean } = {};
@@ -274,19 +295,15 @@ export default function CreateEventScreen() {
     }
   };
 
-  const convertImageToBase64 = async (uri: string): Promise<string> => {
+  const convertImageToFile = async (uri: string): Promise<File> => {
     try {
       const response = await fetch(uri);
       const blob = await response.blob();
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+      const filename = `event_${Date.now()}.jpg`;
+      return new File([blob], filename, { type: 'image/jpeg' });
     } catch (error) {
-      console.error('Error converting image:', error);
-      return '';
+      console.error('❌ Error converting image to file:', error);
+      throw error;
     }
   };
 
@@ -300,6 +317,7 @@ export default function CreateEventScreen() {
     if (!date) newErrors.date = true;
     if (!time) newErrors.time = true;
     if (!selectedLocation) newErrors.location = true;
+    if (categories.length > 0 && selectedCategoryIds.length === 0) newErrors.category = true;
 
     setErrors(newErrors);
 
@@ -316,12 +334,15 @@ export default function CreateEventScreen() {
     setIsCreating(true);
 
     try {
-      // Convertir imagen a base64
-      const imageBase64 = await convertImageToBase64(image!);
+      // 1️⃣ Uploadear imagen al servidor
+      console.log('📸 Uploadando imagen...');
+      const imageFile = await convertImageToFile(image!);
+      const imageURL = await uploadEventImage(imageFile, token);
+      console.log('✅ Imagen uploadada:', imageURL);
 
       let placeId: number;
 
-      // Si hay placeId seleccionado, usarlo
+      // 2️⃣ Si hay placeId seleccionado, usarlo
       if (selectedLocation?.placeId) {
         placeId = selectedLocation.placeId;
       } else {
@@ -343,10 +364,10 @@ export default function CreateEventScreen() {
         console.log('✅ Lugar creado con ID:', placeId);
       }
 
-      // Combinar fecha y hora en formato ISO
+      // 3️⃣ Combinar fecha y hora en formato ISO
       const eventDateTime = `${date}T${time}:00Z`;
 
-      // Crear evento
+      // 4️⃣ Crear evento con la URL de la imagen
       console.log('📝 Creando evento...');
       const eventResponse = await createEvent(
         {
@@ -354,7 +375,8 @@ export default function CreateEventScreen() {
           description: description,
           place_id: placeId,
           event_date: eventDateTime,
-          image_url: imageBase64,
+          category_ids: selectedCategoryIds,
+          image_url: imageURL,
           total_score: 0,
           average_score: 0
         },
@@ -374,11 +396,12 @@ export default function CreateEventScreen() {
       setLatitude(null);
       setLongitude(null);
       setSelectedLocation(null);
+      setSelectedCategoryIds([]);
       setErrors({});
       setIsCreating(false);
     } catch (error: any) {
       console.error('❌ Error al crear evento:', error);
-      const errorMessage = error.response?.data?.error || 'No se pudo crear el evento';
+      const errorMessage = error.response?.data?.error || error.message || 'No se pudo crear el evento';
       Alert.alert("Error", errorMessage);
       setIsCreating(false);
     }
@@ -445,6 +468,44 @@ export default function CreateEventScreen() {
       />
       {errors.description && <Text style={styles.errorText}>La descripción es obligatoria</Text>}
 
+      {/* Category Selection */}
+      <View style={styles.categorySection}>
+        <Text style={styles.sectionTitle}>🏷️ Categorías</Text>
+        {categories.length === 0 ? (
+          <Text style={styles.categoryHelpText}>
+            No hay categorías disponibles. Crea al menos una categoría en el backend.
+          </Text>
+        ) : (
+          <View style={styles.categoryList}>
+            {categories.map((category) => {
+              const selected = selectedCategoryIds.includes(category.id);
+              return (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[
+                    styles.categoryTag,
+                    selected && styles.categoryTagSelected,
+                  ]}
+                  onPress={() => toggleCategory(category.id)}
+                >
+                  <Text
+                    style={[
+                      styles.categoryTagText,
+                      selected && styles.categoryTagTextSelected,
+                    ]}
+                  >
+                    {category.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+        {errors.category && (
+          <Text style={styles.errorText}>Selecciona al menos una categoría</Text>
+        )}
+      </View>
+
       {/* Date Input */}
       <View style={styles.dateTimeContainer}>
         <View style={styles.dateTimeWrapper}>
@@ -499,16 +560,38 @@ export default function CreateEventScreen() {
         {errors.time && <Text style={styles.errorText}>La hora es obligatoria</Text>}
       </View>
 
-      {/* Location Picker */}
-      <TouchableOpacity
-        style={[styles.input, { backgroundColor: selectedLocation ? '#E8F5E9' : '#f5f5f5' }, errors.location && styles.errorInput]}
-        onPress={() => setShowMapModal(true)}
-      >
-        <Text style={{ color: selectedLocation ? '#28A745' : '#999' }}>
-          📍 {selectedLocation ? `${selectedLocation.name.substring(0, 30)}...` : 'Seleccionar Ubicación en Mapa'}
-        </Text>
-      </TouchableOpacity>
-      {errors.location && <Text style={styles.errorText}>La ubicación es obligatoria</Text>}
+      {/* Location Picker - Mostrar estado actual */}
+      <View style={styles.locationSection}>
+        <Text style={styles.sectionTitle}>📍 Ubicación del Evento</Text>
+        
+        {selectedLocation ? (
+          <View style={styles.selectedLocationCard}>
+            <View style={styles.selectedLocationContent}>
+              <Text style={styles.selectedLocationName}>{selectedLocation.name}</Text>
+              <Text style={styles.selectedLocationCoords}>
+                Lat: {selectedLocation.lat.toFixed(4)} | Lng: {selectedLocation.lng.toFixed(4)}
+              </Text>
+              {selectedLocation.placeId && (
+                <Text style={styles.selectedLocationId}>ID del lugar: {selectedLocation.placeId}</Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.changeLocationButton}
+              onPress={() => setShowMapModal(true)}
+            >
+              <Text style={styles.changeLocationText}>Cambiar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.locationPickerButton, errors.location && styles.errorBorder]}
+            onPress={() => setShowMapModal(true)}
+          >
+            <Text style={styles.locationPickerText}>Toca para seleccionar en el mapa</Text>
+          </TouchableOpacity>
+        )}
+        {errors.location && <Text style={styles.errorText}>La ubicación es obligatoria</Text>}
+      </View>
 
       {/* Create Button */}
       <TouchableOpacity 
@@ -883,5 +966,107 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 14
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+    marginLeft: 4
+  },
+  locationSection: {
+    marginBottom: 16
+  },
+  selectedLocationCard: {
+    backgroundColor: '#E8F5E9',
+    borderWidth: 2,
+    borderColor: '#28A745',
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  selectedLocationContent: {
+    flex: 1,
+    paddingRight: 12
+  },
+  selectedLocationName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#28A745',
+    marginBottom: 4
+  },
+  selectedLocationCoords: {
+    fontSize: 11,
+    color: '#666',
+    marginBottom: 2,
+    fontFamily: 'monospace'
+  },
+  selectedLocationId: {
+    fontSize: 10,
+    color: '#999',
+    fontStyle: 'italic'
+  },
+  categorySection: {
+    marginBottom: 16,
+  },
+  categoryList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  categoryTag: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#f4f4f4',
+  },
+  categoryTagSelected: {
+    backgroundColor: '#28A745',
+    borderColor: '#28A745',
+  },
+  categoryTagText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  categoryTagTextSelected: {
+    color: '#fff',
+  },
+  categoryHelpText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+  },
+  changeLocationButton: {
+    backgroundColor: '#28A745',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 70,
+    alignItems: 'center'
+  },
+  changeLocationText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13
+  },
+  locationPickerButton: {
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: '#f9f9f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 60
+  },
+  locationPickerText: {
+    fontSize: 15,
+    color: '#666',
+    fontWeight: '500'
   }
 });

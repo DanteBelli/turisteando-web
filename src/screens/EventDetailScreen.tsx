@@ -10,9 +10,26 @@ interface Event {
   location: string;
   date: string;
   category: string;
-  image?: string;
+  image_url?: string;
   details?: string;
   attendees?: number;
+  _isCluster?: boolean;
+  _clusterEvents?: EventWithPlace[];
+}
+
+interface EventWithPlace {
+  id: number;
+  title: string;
+  description: string;
+  event_date: string;
+  place?: {
+    name: string;
+    latitude: number;
+    longitude: number;
+  };
+  latitude?: number;
+  longitude?: number;
+  image_url?: string;
 }
 
 interface EventDetailScreenProps {
@@ -25,51 +42,20 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
   const [isFavorite, setIsFavorite] = useState(false);
   const [isAttending, setIsAttending] = useState(false);
   const [isLoadingFavorite, setIsLoadingFavorite] = useState(false);
+  const [selectedClusteredEvent, setSelectedClusteredEvent] = useState<Event | null>(null);
 
-  // Cargar estado de favorito cuando se abre el evento
-  useEffect(() => {
-    if (event && user && token) {
-      checkIfEventIsFavorite();
-    }
-  }, [event, user, token]);
-
-  const checkIfEventIsFavorite = async () => {
-    if (!event || !token) return;
-    
-    try {
-      const favorite = await isEventFavorite(event.id, token);
-      setIsFavorite(favorite);
-    } catch (error) {
-      console.error('Error checking favorite status:', error);
-    }
-  };
-
-  const handleToggleFavorite = async () => {
-    if (!event || !user || !token) {
-      Alert.alert('Error', 'Debes estar autenticado');
-      return;
-    }
-
-    setIsLoadingFavorite(true);
-
-    try {
-      if (isFavorite) {
-        // Remover de favoritos
-        await removeEventFromFavorites(event.id, token);
-        setIsFavorite(false);
-        console.log('✅ Evento eliminado de favoritos');
-      } else {
-        // Agregar a favoritos
-        await addEventToFavorites(event.id, token);
-        setIsFavorite(true);
-        console.log('✅ Evento agregado a favoritos');
-      }
-    } catch (error) {
-      console.error('❌ Error al actualizar favorito:', error);
-      Alert.alert('Error', 'No se pudo actualizar los favoritos');
-    } finally {
-      setIsLoadingFavorite(false);
-    }
+  // Convertir evento del cluster al formato esperado
+  const convertEventForDisplay = (eventData: EventWithPlace): Event => {
+    return {
+      id: eventData.id,
+      name: eventData.title,
+      description: eventData.description,
+      location: eventData.place?.name || 'Ubicación no disponible',
+      date: new Date(eventData.event_date).toISOString().split('T')[0],
+      category: 'Evento',
+      image_url: eventData.image_url,
+      details: eventData.description
+    };
   };
 
   if (!event) {
@@ -83,6 +69,175 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
     );
   }
 
+  // Si es un evento individual (no cluster), usar directamente
+  const displayEvent = event._isCluster ? null : event;
+
+  // Cargar estado de favorito cuando se abre el evento
+  useEffect(() => {
+    if (displayEvent && user && token) {
+      checkIfEventIsFavorite();
+    }
+  }, [displayEvent, user, token]);
+
+  const checkIfEventIsFavorite = async () => {
+    if (!displayEvent || !token) return;
+    
+    try {
+      const favorite = await isEventFavorite(displayEvent.id, token);
+      setIsFavorite(favorite);
+    } catch (error) {
+      console.error('Error checking favorite status:', error);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!displayEvent || !user || !token) {
+      Alert.alert('Error', 'Debes estar autenticado');
+      return;
+    }
+
+    setIsLoadingFavorite(true);
+
+    try {
+      if (isFavorite) {
+        // Remover de favoritos
+        await removeEventFromFavorites(displayEvent.id, token);
+        setIsFavorite(false);
+        console.log('✅ Evento eliminado de favoritos');
+      } else {
+        // Agregar a favoritos
+        await addEventToFavorites(displayEvent.id, token);
+        setIsFavorite(true);
+        console.log('✅ Evento agregado a favoritos');
+      }
+    } catch (error) {
+      console.error('❌ Error al actualizar favorito:', error);
+      Alert.alert('Error', 'No se pudo actualizar los favoritos');
+    } finally {
+      setIsLoadingFavorite(false);
+    }
+  };
+
+  // Mostrar lista de eventos si es un cluster
+  if (event._isCluster && event._clusterEvents) {
+    // Si hay un evento seleccionado del cluster, mostrar su detalle
+    if (selectedClusteredEvent) {
+      return (
+        <ScrollView style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity 
+              style={styles.closeButton} 
+              onPress={() => setSelectedClusteredEvent(null)}
+            >
+              <Text style={styles.closeButtonText}>‹</Text>
+            </TouchableOpacity>
+            
+            {selectedClusteredEvent.image_url ? (
+              <Image
+                source={{ uri: selectedClusteredEvent.image_url }}
+                style={styles.eventImage}
+              />
+            ) : (
+              <View style={styles.placeholderImage}>
+                <Text style={styles.placeholderText}>📷</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.content}>
+            <Text style={styles.title}>{selectedClusteredEvent.name}</Text>
+            
+            <View style={styles.categoryContainer}>
+              <View style={[styles.categoryBadge, { backgroundColor: '#28A745' }]}>
+                <Text style={styles.categoryText}>{selectedClusteredEvent.category}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoSection}>
+              <Text style={styles.sectionTitle}>Información</Text>
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>📍 Ubicación:</Text>
+                <Text style={styles.infoValue}>{selectedClusteredEvent.location}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>📅 Fecha:</Text>
+                <Text style={styles.infoValue}>{selectedClusteredEvent.date}</Text>
+              </View>
+            </View>
+
+            <View style={styles.descriptionSection}>
+              <Text style={styles.sectionTitle}>Descripción</Text>
+              <Text style={styles.description}>
+                {selectedClusteredEvent.details || selectedClusteredEvent.description}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.closeMainButton}
+              onPress={() => setSelectedClusteredEvent(null)}
+            >
+              <Text style={styles.closeMainButtonText}>Volver a eventos</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      );
+    }
+
+    // Mostrar lista de eventos del cluster
+    return (
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.content}>
+          <Text style={styles.title}>📍 {event._clusterEvents.length} Eventos en esta ubicación</Text>
+
+          <View style={styles.clusterListContainer}>
+            {event._clusterEvents.map((clusteredEvent, index) => {
+              const displayEvent = convertEventForDisplay(clusteredEvent);
+              return (
+                <TouchableOpacity
+                  key={clusteredEvent.id}
+                  style={styles.clusterEventItem}
+                  onPress={() => setSelectedClusteredEvent(displayEvent)}
+                >
+                  {displayEvent.image_url && (
+                    <Image
+                      source={{ uri: displayEvent.image_url }}
+                      style={styles.clusterEventImage}
+                    />
+                  )}
+                  <View style={styles.clusterEventInfo}>
+                    <Text style={styles.clusterEventTitle} numberOfLines={2}>{displayEvent.name}</Text>
+                    <Text style={styles.clusterEventDate}>
+                      📅 {displayEvent.date}
+                    </Text>
+                    <Text style={styles.clusterEventLocation} numberOfLines={1}>
+                      📍 {displayEvent.location}
+                    </Text>
+                  </View>
+                  <Text style={styles.clusterEventArrow}>›</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity
+            style={styles.closeMainButton}
+            onPress={onClose}
+          >
+            <Text style={styles.closeMainButtonText}>Cerrar</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -90,14 +245,12 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
           <Text style={styles.closeButtonText}>✕</Text>
         </TouchableOpacity>
         
-        {event.image && (
+        {displayEvent.image_url ? (
           <Image
-            source={{ uri: event.image }}
+            source={{ uri: displayEvent.image_url }}
             style={styles.eventImage}
           />
-        )}
-        
-        {!event.image && (
+        ) : (
           <View style={styles.placeholderImage}>
             <Text style={styles.placeholderText}>📷</Text>
           </View>
@@ -105,11 +258,11 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.title}>{event.name}</Text>
+        <Text style={styles.title}>{displayEvent.name}</Text>
         
         <View style={styles.categoryContainer}>
           <View style={[styles.categoryBadge, { backgroundColor: '#28A745' }]}>
-            <Text style={styles.categoryText}>{event.category}</Text>
+            <Text style={styles.categoryText}>{displayEvent.category}</Text>
           </View>
         </View>
 
@@ -118,18 +271,18 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
           
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>📍 Ubicación:</Text>
-            <Text style={styles.infoValue}>{event.location}</Text>
+            <Text style={styles.infoValue}>{displayEvent.location}</Text>
           </View>
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>📅 Fecha:</Text>
-            <Text style={styles.infoValue}>{event.date}</Text>
+            <Text style={styles.infoValue}>{displayEvent.date}</Text>
           </View>
 
-          {event.attendees && (
+          {displayEvent.attendees && (
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>👥 Asistentes:</Text>
-              <Text style={styles.infoValue}>{event.attendees}</Text>
+              <Text style={styles.infoValue}>{displayEvent.attendees}</Text>
             </View>
           )}
         </View>
@@ -137,7 +290,7 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
         <View style={styles.descriptionSection}>
           <Text style={styles.sectionTitle}>Descripción</Text>
           <Text style={styles.description}>
-            {event.details || event.description}
+            {displayEvent.details || displayEvent.description}
           </Text>
         </View>
 
@@ -390,5 +543,48 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#999',
     marginTop: 40,
+  },
+  clusterListContainer: {
+    marginBottom: 20,
+  },
+  clusterEventItem: {
+    flexDirection: 'row',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    marginBottom: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#eee',
+    alignItems: 'center',
+  },
+  clusterEventImage: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#ddd',
+  },
+  clusterEventInfo: {
+    flex: 1,
+    padding: 12,
+    justifyContent: 'center',
+  },
+  clusterEventTitle: {
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+    fontSize: 14,
+  },
+  clusterEventDate: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  clusterEventLocation: {
+    fontSize: 12,
+    color: '#999',
+  },
+  clusterEventArrow: {
+    fontSize: 20,
+    color: '#28A745',
+    marginRight: 12,
   },
 });

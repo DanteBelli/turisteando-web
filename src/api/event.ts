@@ -6,9 +6,15 @@ export interface CreateEventPayload {
   description: string;
   place_id: number;
   event_date: string; // ISO format: "2026-05-15T19:00:00Z"
+  category_ids?: number[];
   image_url?: string;
   total_score?: number;
   average_score?: number;
+}
+
+export interface Category {
+  id: number;
+  name: string;
 }
 
 export interface CreatePlacePayload {
@@ -92,6 +98,19 @@ export const getPlaces = async () => {
     return [];
   } catch (error) {
     console.error('Error fetching places:', error);
+    return [];
+  }
+};
+
+export const getCategories = async (): Promise<Category[]> => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/categories`);
+    if (response.data && Array.isArray(response.data.categories)) {
+      return response.data.categories;
+    }
+    return [];
+  } catch (error) {
+    console.error('Error fetching categories:', error);
     return [];
   }
 };

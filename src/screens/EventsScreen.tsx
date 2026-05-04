@@ -207,55 +207,99 @@ export const EventsScreen: React.FC = () => {
         const googleMap = new window.google.maps.Map(mapElement, mapOptions);
         console.log('✅ Mapa de Google Maps creado exitosamente');
 
-        // Create markers for each event
-        const newMarkers = events.map((event) => {
-          if (!event.latitude || !event.longitude) {
-            console.warn(`Event ${event.id} (${event.title}) missing coordinates`);
-            return null;
+        // Agrupar eventos por ubicación (clustering)
+        const locationMap = new Map<string, EventWithPlace[]>();
+        events.forEach((event) => {
+          if (event.latitude && event.longitude) {
+            // Redondear a 4 decimales para agrupar eventos cercanos
+            const key = `${event.latitude.toFixed(4)},${event.longitude.toFixed(4)}`;
+            if (!locationMap.has(key)) {
+              locationMap.set(key, []);
+            }
+            locationMap.get(key)!.push(event);
           }
+        });
 
-          console.log(`Creating marker for ${event.title} at [${event.latitude}, ${event.longitude}]`);
+        // Crear marcadores agrupados
+        const newMarkers: any[] = [];
+        locationMap.forEach((eventsAtLocation, key) => {
+          if (eventsAtLocation.length === 0) return;
+
           hasValidCoordinates = true;
-          const position = { lat: event.latitude, lng: event.longitude };
+          const firstEvent = eventsAtLocation[0];
+          const position = { lat: firstEvent.latitude!, lng: firstEvent.longitude! };
           bounds.extend(position);
+
+          console.log(`📍 Cluster en ${key}: ${eventsAtLocation.length} evento(s)`);
+
+          // Crear marcador agrupado
+          const markerColor = eventsAtLocation.length === 1 ? '#28A745' : '#FF9800';
+          const markerScale = eventsAtLocation.length === 1 ? 10 : 14;
 
           const marker = new window.google.maps.Marker({
             map: googleMap,
             position: position,
-            title: event.title,
+            title: eventsAtLocation.length === 1 
+              ? eventsAtLocation[0].title 
+              : `${eventsAtLocation.length} eventos`,
             icon: {
               path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 10,
-              fillColor: '#28A745',
+              scale: markerScale,
+              fillColor: markerColor,
               fillOpacity: 1,
               strokeColor: '#fff',
               strokeWeight: 2
-            }
+            },
+            label: eventsAtLocation.length > 1 
+              ? {
+                  text: eventsAtLocation.length.toString(),
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }
+              : undefined
           });
 
-          const infoWindow = new window.google.maps.InfoWindow({
-            content: `
-              <div style="padding: 8px; max-width: 250px;">
-                <h3 style="margin: 0 0 8px 0; color: #333;">${event.title}</h3>
-                <p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">${event.place?.name}</p>
-                <p style="margin: 0; font-size: 11px; color: #999;">${new Date(event.event_date).toLocaleDateString('es-ES')}</p>
-              </div>
-            `,
-            maxWidth: 300
-          });
+          // Si hay un solo evento, mostrar info directamente
+          if (eventsAtLocation.length === 1) {
+            const event = eventsAtLocation[0];
+            const infoWindow = new window.google.maps.InfoWindow({
+              content: `
+                <div style="padding: 8px; max-width: 250px;">
+                  <h3 style="margin: 0 0 8px 0; color: #333;">${event.title}</h3>
+                  <p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">${event.place?.name}</p>
+                  <p style="margin: 0; font-size: 11px; color: #999;">${new Date(event.event_date).toLocaleDateString('es-ES')}</p>
+                </div>
+              `,
+              maxWidth: 300
+            });
 
-          marker.addListener('click', () => {
-            setSelectedEvent(event);
-            setShowEventDetail(true);
-          });
+            marker.addListener('click', () => {
+              setSelectedEvent(event);
+              setShowEventDetail(true);
+            });
 
-          return {
-            event,
-            marker,
-            position,
-            infoWindow
-          };
-        }).filter(Boolean);
+            newMarkers.push({ event, marker, position, infoWindow });
+          } else {
+            // Si hay múltiples eventos, mostrar lista en modal
+            marker.addListener('click', () => {
+              setSelectedEvent({
+                ...eventsAtLocation[0],
+                // Marca este como cluster para mostrar lista
+                _isCluster: true,
+                _clusterEvents: eventsAtLocation
+              } as any);
+              setShowEventDetail(true);
+            });
+
+            newMarkers.push({
+              marker,
+              position,
+              eventsAtLocation,
+              isCluster: true
+            });
+          }
+        });
 
         console.log(`✅ ${newMarkers.length} markers creados`);
 
@@ -361,7 +405,10 @@ export const EventsScreen: React.FC = () => {
             location: selectedEvent.place?.name || 'Ubicación no disponible',
             date: new Date(selectedEvent.event_date).toISOString().split('T')[0],
             description: selectedEvent.description,
-            details: selectedEvent.description
+            details: selectedEvent.description,
+            image_url: selectedEvent.image_url,
+            _isCluster: selectedEvent._isCluster,
+            _clusterEvents: selectedEvent._clusterEvents
           } : null}
           onClose={() => setShowEventDetail(false)}
         />
