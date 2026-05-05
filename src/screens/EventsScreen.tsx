@@ -31,6 +31,7 @@ export const EventsScreen: React.FC = () => {
   const [markers, setMarkers] = useState<any[]>([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>('');
 
   // Handle applying category filters
   const handleApplyFilter = async (categoryIds: number[]) => {
@@ -47,9 +48,18 @@ export const EventsScreen: React.FC = () => {
         // Fetch events filtered by selected categories
         eventsData = await eventService.getEventsByCategories(categoryIds);
       }
-      
+
+      // Apply date filter if selected
+      let filteredEvents = eventsData;
+      if (selectedDate) {
+        filteredEvents = eventsData.filter(event => {
+          const eventDate = new Date(event.event_date).toISOString().split('T')[0];
+          return eventDate === selectedDate;
+        });
+      }
+
       // Extract latitude and longitude from place (IMPORTANT: same as initial load)
-      const eventsWithCoordinates = eventsData.map((event: EventWithPlace) => {
+      const eventsWithCoordinates = filteredEvents.map((event: EventWithPlace) => {
         const lat = event.place?.latitude || event.latitude;
         const lng = event.place?.longitude || event.longitude;
         return {
@@ -74,6 +84,7 @@ export const EventsScreen: React.FC = () => {
       setLoading(true);
       setShowFilterModal(false);
       setSelectedCategoryIds([]);
+      setSelectedDate('');
       
       // Reload all events
       const eventsData = await eventService.getAllWithPlaces();
@@ -94,6 +105,50 @@ export const EventsScreen: React.FC = () => {
     } catch (err) {
       console.error('Error clearing filters:', err);
       setError('Error al cargar los eventos');
+      setLoading(false);
+    }
+  };
+
+  // Handle date filter change
+  const handleDateChange = async (date: string) => {
+    try {
+      setLoading(true);
+      setSelectedDate(date);
+      
+      let eventsData;
+      if (selectedCategoryIds.length === 0) {
+        // If no categories selected, fetch all events
+        eventsData = await eventService.getAllWithPlaces();
+      } else {
+        // Fetch events filtered by selected categories
+        eventsData = await eventService.getEventsByCategories(selectedCategoryIds);
+      }
+
+      // Apply date filter if selected
+      let filteredEvents = eventsData;
+      if (date) {
+        filteredEvents = eventsData.filter(event => {
+          const eventDate = new Date(event.event_date).toISOString().split('T')[0];
+          return eventDate === date;
+        });
+      }
+
+      // Extract coordinates
+      const eventsWithCoordinates = filteredEvents.map((event: EventWithPlace) => {
+        const lat = event.place?.latitude || event.latitude;
+        const lng = event.place?.longitude || event.longitude;
+        return {
+          ...event,
+          latitude: lat,
+          longitude: lng
+        };
+      });
+      
+      setEvents(eventsWithCoordinates);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error applying date filter:', err);
+      setError('Error al filtrar eventos por fecha');
       setLoading(false);
     }
   };
@@ -148,7 +203,6 @@ export const EventsScreen: React.FC = () => {
         const eventsWithCoordinates = eventsData.map((event: EventWithPlace) => {
           const lat = event.place?.latitude || event.latitude;
           const lng = event.place?.longitude || event.longitude;
-          console.log(`Event: ${event.title}, Coordinates: lat=${lat}, lng=${lng}`);
           return {
             ...event,
             latitude: lat,
@@ -364,18 +418,27 @@ export const EventsScreen: React.FC = () => {
           <Text style={styles.title}>📍 Eventos en el Mapa</Text>
           <Text style={styles.subtitle}>{events.length} eventos disponibles</Text>
         </View>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedCategoryIds.length > 0 && styles.filterButtonActive
-          ]}
-          onPress={() => setShowFilterModal(true)}
-        >
-          <Text style={styles.filterButtonText}>🔍 Filtros</Text>
-          {selectedCategoryIds.length > 0 && (
-            <Text style={styles.filterBadge}>{selectedCategoryIds.length}</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.filterContainer}>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => handleDateChange(e.target.value)}
+            style={styles.dateInput}
+            placeholder="Seleccionar fecha"
+          />
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              selectedCategoryIds.length > 0 && styles.filterButtonActive
+            ]}
+            onPress={() => setShowFilterModal(true)}
+          >
+            <Text style={styles.filterButtonText}>🔍 Filtros</Text>
+            {selectedCategoryIds.length > 0 && (
+              <Text style={styles.filterBadge}>{selectedCategoryIds.length}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.mapContainer}>
@@ -407,8 +470,8 @@ export const EventsScreen: React.FC = () => {
             description: selectedEvent.description,
             details: selectedEvent.description,
             image_url: selectedEvent.image_url,
-            _isCluster: selectedEvent._isCluster,
-            _clusterEvents: selectedEvent._clusterEvents
+            _isCluster: (selectedEvent as any)._isCluster,
+            _clusterEvents: (selectedEvent as any)._clusterEvents
           } : null}
           onClose={() => setShowEventDetail(false)}
         />
@@ -455,12 +518,26 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 4,
   },
+  filterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateInput: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    fontSize: 14,
+    marginRight: 8,
+    backgroundColor: '#fff',
+    color: '#333',
+  },
   filterButton: {
     backgroundColor: '#f0f0f0',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    marginLeft: 12,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -504,13 +581,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 32,
   },
   errorText: {
     fontSize: 16,
-    color: '#d32f2f',
+    color: '#666',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   retryButton: {
     backgroundColor: '#28A745',
@@ -520,6 +597,9 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
+
+export default EventsScreen;
