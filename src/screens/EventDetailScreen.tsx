@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { addEventToFavorites, removeEventFromFavorites, isEventFavorite } from '../api/event';
+import { addEventToFavorites, removeEventFromFavorites, isEventFavorite, registerEventAttendance, unregisterEventAttendance } from '../api/event';
 
 interface Event {
   id: number;
@@ -42,6 +42,7 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
   const [isFavorite, setIsFavorite] = useState(false);
   const [isAttending, setIsAttending] = useState(false);
   const [isLoadingFavorite, setIsLoadingFavorite] = useState(false);
+  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
   const [selectedClusteredEvent, setSelectedClusteredEvent] = useState<Event | null>(null);
 
   // Convertir evento del cluster al formato esperado
@@ -115,6 +116,34 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
       Alert.alert('Error', 'No se pudo actualizar los favoritos');
     } finally {
       setIsLoadingFavorite(false);
+    }
+  };
+
+  const handleToggleAttendance = async () => {
+    if (!displayEvent || !user || !token) {
+      Alert.alert('Error', 'Debes estar autenticado');
+      return;
+    }
+
+    setIsLoadingAttendance(true);
+
+    try {
+      if (isAttending) {
+        // Desregistrar de la asistencia
+        await unregisterEventAttendance(displayEvent.id, token);
+        setIsAttending(false);
+        console.log('✅ Desregistrado de la asistencia');
+      } else {
+        // Registrar la asistencia
+        await registerEventAttendance(displayEvent.id, token);
+        setIsAttending(true);
+        console.log('✅ Registrado para asistir');
+      }
+    } catch (error) {
+      console.error('❌ Error al actualizar asistencia:', error);
+      Alert.alert('Error', 'No se pudo actualizar la asistencia');
+    } finally {
+      setIsLoadingAttendance(false);
     }
   };
 
@@ -317,11 +346,16 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
               styles.attendButton,
               isAttending && styles.attendButtonActive
             ]}
-            onPress={() => setIsAttending(!isAttending)}
+            onPress={handleToggleAttendance}
+            disabled={isLoadingAttendance}
           >
-            <Text style={styles.attendButtonText}>
-              {isAttending ? '✓ Voy a asistir' : '+ Voy a asistir'}
-            </Text>
+            {isLoadingAttendance ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.attendButtonText}>
+                {isAttending ? '✓ Voy a asistir' : '+ Voy a asistir'}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 

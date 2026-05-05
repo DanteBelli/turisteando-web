@@ -190,3 +190,59 @@ export const getUserFavorites = async (token: string) => {
     return [];
   }
 };
+
+// ATTENDANCES
+export const registerEventAttendance = async (eventId: number, token: string) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/events/${eventId}/attendees`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response;
+  } catch (error) {
+    console.error('Error registering event attendance:', error);
+    throw error;
+  }
+};
+
+export const unregisterEventAttendance = async (eventId: number, token: string) => {
+  try {
+    const response = await axios.delete(
+      `${API_BASE_URL}/events/${eventId}/attendees`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response;
+  } catch (error) {
+    console.error('Error unregistering event attendance:', error);
+    throw error;
+  }
+};
+
+// USER STATS
+export const getUserStats = async (token: string) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/users/me/stats`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching user stats:', error);
+    return { created_events: 0, favorites: 0, attendances: 0 };
+  }
+};

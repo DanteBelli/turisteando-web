@@ -1,53 +1,64 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Modal } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { getUserFavorites, removeEventFromFavorites } from '../api/event';
+import EventDetailScreen from './EventDetailScreen';
 
 interface FavoriteEvent {
   id: number;
-  name: string;
+  title: string;
   description: string;
-  location: string;
-  date: string;
-  category: string;
-  savedDate: string;
+  event_date: string;
+  place_id?: number;
+  image_url?: string;
 }
 
-const MOCK_FAVORITES: FavoriteEvent[] = [
-  {
-    id: 1,
-    name: 'Cafe Buenos Aires',
-    description: 'Disfruta de un auténtico café porteño',
-    location: 'San Telmo, CABA',
-    date: '2026-04-15',
-    category: 'Gastronomía',
-    savedDate: '2 días ago'
-  },
-  {
-    id: 3,
-    name: 'Festival Gastronómico',
-    description: 'Prueba los mejores platos de la región',
-    location: 'Recoleta, CABA',
-    date: '2026-04-25',
-    category: 'Gastronomía',
-    savedDate: '1 semana ago'
-  }
-];
-
 export default function FavoritesScreen() {
-  const { user } = useAuth();
-  const [favorites, setFavorites] = useState<FavoriteEvent[]>(MOCK_FAVORITES);
+  const { token } = useAuth();
+  const [favorites, setFavorites] = useState<FavoriteEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<FavoriteEvent | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
-  const handleRemoveFavorite = (id: number) => {
-    setFavorites(favorites.filter(fav => fav.id !== id));
+  useEffect(() => {
+    const loadFavorites = async () => {
+      if (!token) return;
+      setLoading(true);
+      try {
+        const favoriteEvents = await getUserFavorites(token);
+        setFavorites(favoriteEvents);
+      } catch (error) {
+        console.error('Error cargando favoritos:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadFavorites();
+  }, [token]);
+
+  const handleRemoveFavorite = async (id: number) => {
+    if (!token) {
+      Alert.alert('Error', 'No autenticado');
+      return;
+    }
+
+    try {
+      await removeEventFromFavorites(id, token);
+      setFavorites((prev) => prev.filter((fav) => fav.id !== id));
+    } catch (error) {
+      console.error('Error eliminando favorito:', error);
+      Alert.alert('Error', 'No se pudo eliminar el favorito');
+    }
   };
 
   const renderFavoriteItem = ({ item }: { item: FavoriteEvent }) => (
     <View style={styles.favoriteCard}>
       <View style={styles.cardHeader}>
         <View style={styles.titleContainer}>
-          <Text style={styles.favoriteTitle}>{item.name}</Text>
+          <Text style={styles.favoriteTitle}>{item.title}</Text>
           <View style={[styles.categoryBadge, { backgroundColor: '#28A745' }]}>
-            <Text style={styles.categoryText}>{item.category}</Text>
+            <Text style={styles.categoryText}>Favorito</Text>
           </View>
         </View>
         <TouchableOpacity
@@ -58,30 +69,47 @@ export default function FavoritesScreen() {
         </TouchableOpacity>
       </View>
 
+      <TouchableOpacity
+        style={styles.detailButton}
+        onPress={() => {
+          setSelectedEvent(item);
+          setModalVisible(true);
+        }}
+      >
+        <Text style={styles.detailText}>Ver Detalle</Text>
+      </TouchableOpacity>
+
       <Text style={styles.description}>{item.description}</Text>
 
       <View style={styles.infoRow}>
-        <Text style={styles.infoText}>📍 {item.location}</Text>
+        <Text style={styles.infoText}>� {new Date(item.event_date).toLocaleDateString('es-ES')}</Text>
+        <Text style={styles.infoText}>Lugar ID: {item.place_id ?? 'N/A'}</Text>
       </View>
-      <View style={styles.infoRow}>
-        <Text style={styles.infoText}>📅 {item.date}</Text>
-        <Text style={styles.savedDate}>Guardado: {item.savedDate}</Text>
-      </View>
-
-      <TouchableOpacity style={styles.viewButton}>
-        <Text style={styles.viewButtonText}>Ver Detalle</Text>
-      </TouchableOpacity>
     </View>
   );
 
   return (
+    <React.Fragment>
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>❤️ Mis Favoritos</Text>
         <Text style={styles.favoritesCount}>{favorites.length} guardados</Text>
       </View>
 
-      {favorites.length === 0 ? (
+      {!token ? (
+        <ScrollView style={styles.emptyContainer}>
+          <View style={styles.emptyContent}>
+            <Text style={styles.emptyIcon}>🔒</Text>
+            <Text style={styles.emptyTitle}>Inicia sesión para ver tus favoritos</Text>
+            <Text style={styles.emptyText}>Los eventos guardados se cargan desde tu cuenta.</Text>
+          </View>
+        </ScrollView>
+      ) : loading ? (
+        <View style={[styles.emptyContainer, styles.loadingContainer]}>
+          <ActivityIndicator size="large" color="#28A745" />
+          <Text style={styles.loadingText}>Cargando tus favoritos...</Text>
+        </View>
+      ) : favorites.length === 0 ? (
         <ScrollView style={styles.emptyContainer}>
           <View style={styles.emptyContent}>
             <Text style={styles.emptyIcon}>🔖</Text>
@@ -101,6 +129,26 @@ export default function FavoritesScreen() {
         />
       )}
     </View>
+
+    <Modal
+      visible={modalVisible}
+      animationType="slide"
+      onRequestClose={() => setModalVisible(false)}
+    >
+      <EventDetailScreen
+        event={selectedEvent ? {
+          id: selectedEvent.id,
+          name: selectedEvent.title,
+          description: selectedEvent.description,
+          location: `Place ID: ${selectedEvent.place_id ?? 'N/A'}`,
+          date: selectedEvent.event_date,
+          category: 'Favorito',
+          image_url: selectedEvent.image_url,
+        } : null}
+        onClose={() => setModalVisible(false)}
+      />
+    </Modal>
+    </React.Fragment>
   );
 }
 
@@ -154,6 +202,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#333',
+  },
   listContainer: {
     paddingHorizontal: 16,
     paddingBottom: 16,
@@ -206,6 +265,19 @@ const styles = StyleSheet.create({
   },
   removeIcon: {
     fontSize: 20,
+  },
+  detailButton: {
+    backgroundColor: '#28A745',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  detailText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   description: {
     fontSize: 14,

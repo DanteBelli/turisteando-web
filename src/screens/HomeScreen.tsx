@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { eventService } from '../api/services';
+import { getUserStats } from '../api/event';
 import { Event } from '../types';
 
 interface HomeScreenProps {
@@ -9,9 +10,15 @@ interface HomeScreenProps {
 }
 
 export default function HomeScreen({ onNavigate }: HomeScreenProps) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [userStats, setUserStats] = useState({
+    created_events: 0,
+    favorites: 0,
+    attendances: 0,
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -26,6 +33,25 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     };
     fetchEvents();
   }, []);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!token) {
+        setLoadingStats(false);
+        return;
+      }
+
+      try {
+        const statsData = await getUserStats(token);
+        setUserStats(statsData);
+      } catch (err) {
+        console.error('Error loading stats:', err);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    fetchStats();
+  }, [token]);
 
   const quickActions = [
     { id: 'events', label: 'Explorar Eventos', icon: '🔍', color: '#28A745' },
@@ -50,9 +76,9 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   };
 
   const stats = [
-    { label: 'Eventos', value: loadingEvents ? '...' : String(events.length), icon: '📅' },
-    { label: 'Favoritos', value: '0', icon: '❤️' },
-    { label: 'Asistencias', value: '0', icon: '✓' },
+    { label: 'Eventos', value: loadingEvents ? '...' : String(userStats.created_events), icon: '📅' },
+    { label: 'Favoritos', value: loadingStats ? '...' : String(userStats.favorites), icon: '❤️' },
+    { label: 'Asistencias', value: loadingStats ? '...' : String(userStats.attendances), icon: '✓' },
   ];
 
   return (
