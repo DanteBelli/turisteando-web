@@ -16,12 +16,6 @@ interface Event {
   average_score?: number;
   total_score?: number;
   attendees_count?: number;
-  attendees_list?: {
-    user_id: number;
-    estado: string;
-    review?: string;
-    score?: number;
-  }[];
   _isCluster?: boolean;
   _clusterEvents?: EventWithPlace[];
 }
@@ -69,23 +63,11 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
       setIsLoadingEventDetails(true);
       const response = await getEventById(eventId);
       if (response && response.event) {
-        const enrichedEvent = {
+        setEventDetails({
           ...currentEvent,
           ...response.event,
           attendees_count: response.total_count,
-          attendees_list: response.attendees,
-        } as Event;
-
-        setEventDetails(enrichedEvent);
-
-        if (user && Array.isArray(response.attendees)) {
-          const hasAttendance = response.attendees.some(
-            (attendee: any) =>
-              attendee.user_id === user.id &&
-              (attendee.estado === 'registered' || attendee.estado === 'asistiendo' || attendee.estado === 'asistio')
-          );
-          setIsAttending(hasAttendance);
-        }
+        });
       }
     } catch (error) {
       console.error('Error fetching event details:', error);
@@ -111,14 +93,13 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
     }
   }, [event]);
 
-  const displayEvent = eventDetails || (event?._isCluster ? selectedClusteredEvent : event);
-
   useEffect(() => {
     if (displayEvent && user && token) {
       checkIfEventIsFavorite();
     }
   }, [displayEvent, user, token]);
 
+  const displayEvent = eventDetails || (event?._isCluster ? selectedClusteredEvent : event);
 
   const checkIfEventIsFavorite = async () => {
     if (!displayEvent || !token) return;
@@ -317,23 +298,19 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
               )}
             </TouchableOpacity>
 
-            {isAttending ? (
-              <View style={[styles.attendButton, styles.attendButtonActive, styles.attendingLabel]}>
-                <Text style={styles.attendButtonText}>✓ Ya te inscribiste</Text>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.attendButton}
-                onPress={handleToggleAttendance}
-                disabled={isLoadingAttendance}
-              >
-                {isLoadingAttendance ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.attendButtonText}>+ Voy a asistir</Text>
-                )}
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.attendButton, isAttending && styles.attendButtonActive]}
+              onPress={handleToggleAttendance}
+              disabled={isLoadingAttendance}
+            >
+              {isLoadingAttendance ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.attendButtonText}>
+                  {isAttending ? '✓ Voy a asistir' : '+ Voy a asistir'}
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
 
           <View style={styles.bottomSection}>
@@ -367,244 +344,3 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
     );
   }
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  header: {
-    position: 'relative',
-    backgroundColor: '#f5f5f5',
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    zIndex: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  eventImage: {
-    width: '100%',
-    height: 300,
-    backgroundColor: '#ddd',
-  },
-  placeholderImage: {
-    width: '100%',
-    height: 300,
-    backgroundColor: '#ddd',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholderText: {
-    fontSize: 80,
-  },
-  content: {
-    padding: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  categoryContainer: {
-    marginBottom: 20,
-  },
-  categoryBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  categoryText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  infoSection: {
-    backgroundColor: '#f9f9f9',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  infoRow: {
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  infoLabel: {
-    fontWeight: '600',
-    color: '#555',
-    marginRight: 8,
-    minWidth: 100,
-  },
-  infoValue: {
-    color: '#333',
-    flex: 1,
-  },
-  descriptionSection: {
-    marginBottom: 20,
-  },
-  description: {
-    fontSize: 16,
-    color: '#555',
-    lineHeight: 24,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  favoriteButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#28A745',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  favoriteButtonActive: {
-    backgroundColor: '#28A745',
-  },
-  favoriteButtonText: {
-    color: '#28A745',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  attendButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#28A745',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attendButtonActive: {
-    backgroundColor: '#1e7e34',
-  },
-  attendingLabel: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#6c757d',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attendButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  bottomSection: {
-    marginBottom: 20,
-  },
-  detailsCard: {
-    backgroundColor: '#f0f7f0',
-    padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#28A745',
-    marginBottom: 20,
-  },
-  detailsText: {
-    color: '#555',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  userSection: {
-    marginBottom: 20,
-  },
-  userCard: {
-    backgroundColor: '#f9f9f9',
-    padding: 12,
-    borderRadius: 8,
-  },
-  userName: {
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  userEmail: {
-    color: '#666',
-    fontSize: 14,
-  },
-  closeMainButton: {
-    paddingVertical: 14,
-    borderRadius: 8,
-    backgroundColor: '#28A745',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  closeMainButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  noEventText: {
-    textAlign: 'center',
-    color: '#999',
-    marginTop: 40,
-  },
-  clusterListContainer: {
-    marginBottom: 20,
-  },
-  clusterEventItem: {
-    flexDirection: 'row',
-    backgroundColor: '#f9f9f9',
-    borderRadius: 8,
-    marginBottom: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#eee',
-    alignItems: 'center',
-  },
-  clusterEventImage: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#ddd',
-  },
-  clusterEventInfo: {
-    flex: 1,
-    padding: 12,
-    justifyContent: 'center',
-  },
-  clusterEventTitle: {
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-    fontSize: 14,
-  },
-  clusterEventDate: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  clusterEventLocation: {
-    fontSize: 12,
-    color: '#999',
-  },
-  clusterEventArrow: {
-    fontSize: 20,
-    color: '#28A745',
-    marginRight: 12,
-  },
-});

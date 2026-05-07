@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { Sidebar } from '../components/Sidebar';
 import { EventsScreen } from './EventsScreen';
 import { ProfileScreen } from './ProfileScreen';
 import ChatScreen from './ChatScreen';
 import FavoritesScreen from './FavoritesScreen';
 import HomeScreen from './HomeScreen';
+import RateEventsScreen from './RateEventsScreen';
 import { useAuth } from '../context/AuthContext';
 import { Loading } from '../components/Common';
 import CreateEventScreen from '../screens/CreateEventScreen';
@@ -31,6 +32,9 @@ export const MainScreen: React.FC = () => {
 
     case 'messages':
       return <ChatScreen />;
+
+    case 'rate-events':
+      return <RateEventsScreen />;
 
     case 'create-event':
       return <CreateEventScreen />;

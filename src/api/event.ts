@@ -191,6 +191,16 @@ export const getUserFavorites = async (token: string) => {
   }
 };
 
+export const getEventById = async (eventId: number) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/events/${eventId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching event details:', error);
+    throw error;
+  }
+};
+
 // ATTENDANCES
 export const registerEventAttendance = async (eventId: number, token: string) => {
   try {
@@ -244,5 +254,41 @@ export const getUserStats = async (token: string) => {
   } catch (error) {
     console.error('Error fetching user stats:', error);
     return { created_events: 0, favorites: 0, attendances: 0 };
+  }
+};
+
+export const getPastEventsToRate = async (userId: number, token: string) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/users/${userId}/past-events-to-rate`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data.events || [];
+  } catch (error) {
+    console.error('Error fetching past events to rate:', error);
+    throw error;
+  }
+};
+
+export const rateEvent = async (eventId: number, data: { score: number; review: string }, token: string) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/events/${eventId}/rate`,
+      data,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response;
+  } catch (error) {
+    console.error('Error rating event:', error);
+    throw error;
   }
 };

@@ -39,6 +39,14 @@ export default function TabLayout() {
       />
       
       <Tabs.Screen
+        name="rate-events"
+        options={{
+          title: 'Puntuar',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="star.fill" color={color} />,
+        }}
+      />
+      
+      <Tabs.Screen
         name="create-event"
         options={{
           title: 'Crear',
