@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { addEventToFavorites, removeEventFromFavorites, isEventFavorite, registerEventAttendance, unregisterEventAttendance, getEventById } from '../api/event';
+import { addEventToFavorites, removeEventFromFavorites, isEventFavorite, registerEventAttendance, unregisterEventAttendance, getEventById, getEventReviews } from '../api/event';
 
 interface Event {
   id: number;
@@ -55,6 +55,8 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
   const [isLoadingEventDetails, setIsLoadingEventDetails] = useState(false);
   const [eventDetails, setEventDetails] = useState<Event | null>(null);
   const [selectedClusteredEvent, setSelectedClusteredEvent] = useState<Event | null>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
 
   const currentEvent = selectedClusteredEvent || (event && !event._isCluster ? event : null);
 
@@ -67,6 +69,8 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
   const fetchEventDetails = async (eventId: number) => {
     try {
       setIsLoadingEventDetails(true);
+      setIsLoadingReviews(true);
+      
       const response = await getEventById(eventId);
       if (response && response.event) {
         const enrichedEvent = {
@@ -87,10 +91,22 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
           setIsAttending(hasAttendance);
         }
       }
+
+      // Obtener reviews del evento
+      if (token) {
+        try {
+          const eventReviews = await getEventReviews(eventId, token);
+          setReviews(eventReviews);
+        } catch (error) {
+          console.error('Error fetching reviews:', error);
+          setReviews([]);
+        }
+      }
     } catch (error) {
       console.error('Error fetching event details:', error);
     } finally {
       setIsLoadingEventDetails(false);
+      setIsLoadingReviews(false);
     }
   };
 
@@ -337,6 +353,25 @@ export default function EventDetailScreen({ event, onClose }: EventDetailScreenP
           </View>
 
           <View style={styles.bottomSection}>
+            {reviews.length > 0 && (
+              <>
+                <Text style={styles.sectionTitle}>Reviews ({reviews.length})</Text>
+                <View style={styles.reviewsContainer}>
+                  {reviews.map((review, index) => (
+                    <View key={index} style={styles.reviewCard}>
+                      <View style={styles.reviewHeader}>
+                        <Text style={styles.reviewUserName}>{review.user_name}</Text>
+                        <Text style={styles.reviewScore}>⭐ {review.score}/10</Text>
+                      </View>
+                      {review.review && (
+                        <Text style={styles.reviewText}>{review.review}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+
             <Text style={styles.sectionTitle}>Detalles del evento</Text>
             <View style={styles.detailsCard}>
               <Text style={styles.detailsText}>
@@ -544,8 +579,40 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   userEmail: {
-    color: '#666',
+    color: '#999',
+    fontSize: 12,
+  },
+  reviewsContainer: {
+    marginBottom: 20,
+  },
+  reviewCard: {
+    backgroundColor: '#f9f9f9',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#28A745',
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reviewUserName: {
+    fontWeight: 'bold',
+    color: '#333',
     fontSize: 14,
+  },
+  reviewScore: {
+    color: '#28A745',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  reviewText: {
+    color: '#555',
+    fontSize: 13,
+    lineHeight: 18,
   },
   closeMainButton: {
     paddingVertical: 14,

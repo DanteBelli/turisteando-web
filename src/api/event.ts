@@ -292,3 +292,21 @@ export const rateEvent = async (eventId: number, data: { score: number; review: 
     throw error;
   }
 };
+
+export const getEventReviews = async (eventId: number, token: string) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/events/${eventId}/reviews`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response.data.reviews || [];
+  } catch (error) {
+    console.error('Error fetching event reviews:', error);
+    throw error;
+  }
+};

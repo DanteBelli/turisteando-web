@@ -41,6 +41,11 @@ export default function RateEventsScreen() {
   const handleRateEvent = async () => {
     if (!ratingEvent) return;
 
+    if (!score || review.trim() === '') {
+      Alert.alert('Error', 'Debes seleccionar una calificación y escribir una review');
+      return;
+    }
+
     try {
       await rateEvent(ratingEvent.id, { score, review }, token!);
       Alert.alert('Éxito', 'Evento puntuado correctamente');
@@ -95,7 +100,7 @@ export default function RateEventsScreen() {
           ))}
         </View>
 
-        <Text style={styles.label}>Review (opcional):</Text>
+        <Text style={styles.label}>Review (obligatorio):</Text>
         <TextInput
           style={styles.reviewInput}
           value={review}
