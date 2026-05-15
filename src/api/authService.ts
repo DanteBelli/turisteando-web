@@ -79,4 +79,52 @@ export const authService = {
     const token = await apiClient.getAuthToken();
     return !!token;
   },
+
+  async requestPasswordReset(email: string): Promise<any> {
+    try {
+      const response = await apiClient.post<any>(
+        '/users/request-password-reset',
+        { email }
+      );
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async resetPassword(email: string, code: string, newPassword: string): Promise<any> {
+    try {
+      const response = await apiClient.post<any>(
+        '/users/reset-password',
+        { email, code, password: newPassword }
+      );
+      
+      // Save token if provided
+      if (response.data.token) {
+        await apiClient.setAuthToken(response.data.token);
+      }
+      
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async loginWithGoogle(googleToken: string): Promise<AuthResponse> {
+    try {
+      const response = await apiClient.post<any>(
+        '/auth/google',
+        { token: googleToken }
+      );
+      
+      // Save token
+      if (response.data.token) {
+        await apiClient.setAuthToken(response.data.token);
+      }
+      
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
 };

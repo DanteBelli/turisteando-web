@@ -8,11 +8,27 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   error: string | null;
+  isForgotPassword: boolean;
+  forgotPasswordStep: 'email' | 'reset';
+  forgotEmail: string;
+  resetCode: string;
+  newPassword: string;
+  confirmNewPassword: string;
   login: (credentials: LoginRequest) => Promise<void>;
   register: (userData: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
   checkAuth: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
+  loginWithGoogle: (googleToken: string) => Promise<void>;
+  setIsForgotPassword: (value: boolean) => void;
+  setForgotPasswordStep: (step: 'email' | 'reset') => void;
+  setForgotEmail: (email: string) => void;
+  setResetCode: (code: string) => void;
+  setNewPassword: (password: string) => void;
+  setConfirmNewPassword: (password: string) => void;
+  resetForgotPasswordForm: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,6 +38,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotPasswordStep, setForgotPasswordStep] = useState<'email' | 'reset'>('email');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
 
   // Check if user is already authenticated on mount
   const checkAuth = useCallback(async () => {
@@ -150,17 +172,116 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setError(null);
   }, []);
 
+  const resetForgotPasswordForm = useCallback(() => {
+    setIsForgotPassword(false);
+    setForgotPasswordStep('email');
+    setForgotEmail('');
+    setResetCode('');
+    setNewPassword('');
+    setConfirmNewPassword('');
+  }, []);
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      await authService.requestPasswordReset(email);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Error al solicitar reset de contraseña';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const resetPassword = useCallback(async (email: string, code: string, newPassword: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await authService.resetPassword(email, code, newPassword);
+      setToken(response.token);
+      
+      // Fetch user data from API
+      const userData = await authService.getCurrentUserFromAPI();
+      if (userData) {
+        setUser(userData);
+      } else {
+        setUser({
+          id: 0,
+          email: email,
+          name: 'Usuario',
+          last_name: '',
+          celular: 0,
+          tipo_user: 1,
+        } as User);
+      }
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Error al resetear contraseña';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const loginWithGoogle = useCallback(async (googleToken: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await authService.loginWithGoogle(googleToken);
+      setToken(response.token);
+      
+      // Fetch user data from API
+      const userData = await authService.getCurrentUserFromAPI();
+      if (userData) {
+        setUser(userData);
+      } else {
+        setUser({
+          id: 0,
+          email: '',
+          name: 'Usuario',
+          last_name: '',
+          celular: 0,
+          tipo_user: 1,
+        } as User);
+      }
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Error al iniciar sesión con Google';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const value: AuthContextType = {
     user,
     token,
     isLoading,
     isAuthenticated: !!token,
     error,
+    isForgotPassword,
+    forgotPasswordStep,
+    forgotEmail,
+    resetCode,
+    newPassword,
+    confirmNewPassword,
     login,
     register,
     logout,
     clearError,
     checkAuth,
+    requestPasswordReset,
+    resetPassword,
+    loginWithGoogle,
+    setIsForgotPassword,
+    setForgotPasswordStep,
+    setForgotEmail,
+    setResetCode,
+    setNewPassword,
+    setConfirmNewPassword,
+    resetForgotPasswordForm,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -14,7 +14,16 @@ import {
 import { useAuth } from '@/src/context/AuthContext';
 
 export default function LoginScreen() {
-  const { login, register, isLoading, error, clearError } = useAuth();
+  const { 
+    login, register, isLoading, error, clearError, requestPasswordReset, resetPassword, loginWithGoogle,
+    isForgotPassword, setIsForgotPassword,
+    forgotPasswordStep, setForgotPasswordStep,
+    forgotEmail, setForgotEmail,
+    resetCode, setResetCode,
+    newPassword, setNewPassword,
+    confirmNewPassword, setConfirmNewPassword,
+    resetForgotPasswordForm
+  } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
   
   // Login fields
@@ -83,6 +92,77 @@ export default function LoginScreen() {
     }
   };
 
+  const handleRequestPasswordReset = async () => {
+    console.log('[FRONTEND] handleRequestPasswordReset called with email:', forgotEmail);
+    if (!forgotEmail) {
+      Alert.alert('Campos requeridos', 'Por favor ingresa tu correo electrónico');
+      return;
+    }
+
+    try {
+      clearError();
+      console.log('[FRONTEND] Calling requestPasswordReset API...');
+      await requestPasswordReset(forgotEmail);
+      console.log('[FRONTEND] requestPasswordReset success');
+      console.log('[FRONTEND] Setting forgotPasswordStep to reset BEFORE alert');
+      setForgotPasswordStep('reset');
+      console.log('[FRONTEND] forgotPasswordStep updated to reset');
+      Alert.alert('Éxito', 'Se ha enviado un código de reset a tu correo. Por favor verifica tu bandeja de entrada.');
+      console.log('[FRONTEND] Alert shown');
+    } catch (err: any) {
+      console.log('[FRONTEND ERROR] requestPasswordReset failed:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Error al solicitar reset';
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    console.log('[FRONTEND] handleResetPassword called with email:', forgotEmail, 'code:', resetCode);
+    if (!resetCode || !newPassword || !confirmNewPassword) {
+      Alert.alert('Campos requeridos', 'Por favor completa todos los campos');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      Alert.alert('Error', 'Las contraseñas no coinciden');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    try {
+      clearError();
+      console.log('[FRONTEND] Calling resetPassword API...');
+      await resetPassword(forgotEmail, resetCode, newPassword);
+      console.log('[FRONTEND] resetPassword success');
+      Alert.alert('Éxito', 'Tu contraseña ha sido actualizada correctamente');
+      resetForgotPasswordForm();
+      console.log('[FRONTEND] Form reset');
+    } catch (err: any) {
+      console.log('[FRONTEND ERROR] resetPassword failed:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Error al resetear contraseña';
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      // TODO: Implementar Google Sign-In usando expo-auth-session o similar
+      // Por ahora, mostrar un mensaje
+      Alert.alert('En desarrollo', 'La funcionalidad de Google Login se implementará pronto');
+      
+      // Cuando esté implementado:
+      // const googleToken = await getGoogleToken(); // Obtener token de Google
+      // await loginWithGoogle(googleToken);
+    } catch (err: any) {
+      const errorMessage = err.message || 'Error al iniciar sesión con Google';
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -91,11 +171,111 @@ export default function LoginScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>Turisteando</Text>
           <Text style={styles.subtitle}>
-            {isRegistering ? 'Crear nueva cuenta' : 'Bienvenido'}
+            {isForgotPassword ? 'Recuperar contraseña' : isRegistering ? 'Crear nueva cuenta' : 'Bienvenido'}
           </Text>
         </View>
 
-        {!isRegistering ? (
+        {isForgotPassword ? (
+          // Forgot Password Form
+          <View style={styles.form}>
+            {forgotPasswordStep === 'email' ? (
+              <>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Correo electrónico</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="correo@ejemplo.com"
+                    placeholderTextColor="#999"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={forgotEmail}
+                    onChangeText={setForgotEmail}
+                    editable={!isLoading}
+                  />
+                </View>
+
+                <Text style={styles.infoText}>
+                  Te enviaremos un código de recuperación a tu correo electrónico
+                </Text>
+
+                {error && <Text style={styles.errorText}>{error}</Text>}
+
+                <TouchableOpacity
+                  style={[styles.button, isLoading && styles.buttonDisabled]}
+                  onPress={handleRequestPasswordReset}
+                  disabled={isLoading}>
+                  {isLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Enviar código</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Código de recuperación</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="000000"
+                    placeholderTextColor="#999"
+                    keyboardType="number-pad"
+                    value={resetCode}
+                    onChangeText={setResetCode}
+                    editable={!isLoading}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Nueva contraseña</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="••••••••"
+                    placeholderTextColor="#999"
+                    secureTextEntry
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    editable={!isLoading}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Confirmar contraseña</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="••••••••"
+                    placeholderTextColor="#999"
+                    secureTextEntry
+                    value={confirmNewPassword}
+                    onChangeText={setConfirmNewPassword}
+                    editable={!isLoading}
+                  />
+                </View>
+
+                {error && <Text style={styles.errorText}>{error}</Text>}
+
+                <TouchableOpacity
+                  style={[styles.button, isLoading && styles.buttonDisabled]}
+                  onPress={handleResetPassword}
+                  disabled={isLoading}>
+                  {isLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Actualizar contraseña</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity onPress={() => {
+              resetForgotPasswordForm();
+            }}>
+              <Text style={styles.linkText}>
+                <Text style={styles.linkBold}>← Volver al login</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : !isRegistering ? (
           // Login Form
           <View style={styles.form}>
             <View style={styles.inputGroup}>
@@ -138,9 +318,29 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
+            <TouchableOpacity onPress={() => {
+              setIsForgotPassword(true);
+              setForgotPasswordStep('email');
+            }}>
+              <Text style={styles.linkText}>
+                ¿Olvidaste tu contraseña? <Text style={styles.linkBold}>Recupérala aquí</Text>
+              </Text>
+            </TouchableOpacity>
+
             <View style={styles.divider}>
               <View style={styles.line} />
               <Text style={styles.dividerText}>o</Text>
+              <View style={styles.line} />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.googleButton, isLoading && styles.buttonDisabled]}
+              onPress={handleGoogleLogin}
+              disabled={isLoading}>
+              <Text style={styles.googleButtonText}>📧 Continuar con Google</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider}>
               <View style={styles.line} />
             </View>
 
@@ -308,6 +508,21 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 20,
   },
+  googleButton: {
+    backgroundColor: '#fff',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  googleButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   buttonDisabled: {
     opacity: 0.7,
   },
@@ -321,6 +536,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 12,
     marginTop: -8,
+  },
+  infoText: {
+    color: '#666',
+    fontSize: 13,
+    marginBottom: 16,
+    fontStyle: 'italic',
   },
   divider: {
     flexDirection: 'row',
