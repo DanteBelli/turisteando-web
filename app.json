@@ -23,7 +23,8 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/LogoTuristeando.png",
+      "bundleAssets": true
     },
     "plugins": [
       "expo-router",

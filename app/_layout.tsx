@@ -20,6 +20,13 @@ function RootLayoutNav() {
   const { isAuthenticated, isLoading, token } = useAuth();
 
   useEffect(() => {
+    // Set page title
+    if (typeof document !== 'undefined') {
+      document.title = 'Turisteando';
+    }
+  }, []);
+
+  useEffect(() => {
     console.log('RootLayoutNav actualizado. isAuthenticated:', isAuthenticated, 'isLoading:', isLoading, 'token:', !!token);
   }, [isAuthenticated, isLoading, token]);
 
