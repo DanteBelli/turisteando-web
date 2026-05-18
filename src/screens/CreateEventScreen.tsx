@@ -48,6 +48,10 @@ export default function CreateEventScreen() {
   const [placeDescription, setPlaceDescription] = useState('');
   const [placeErrors, setPlaceErrors] = useState<{ name?: boolean; description?: boolean }>({});
   const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number } | null>(null);
+  
+  // Estado para modal de confirmación de ubicación
+  const [showLocationConfirmModal, setShowLocationConfirmModal] = useState(false);
+  const [pendingRightClickLocation, setPendingRightClickLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // Load Google Maps script
   useEffect(() => {
@@ -122,7 +126,9 @@ export default function CreateEventScreen() {
       return;
     }
 
-    let selectedMarker: any = null;
+    let selectedMarkerRef: any = null;
+    let isMarkerClick = false; // Bandera para rastrear clicks en marcadores
+    const markersMap = new Map<number, any>();
 
     // Mostrar markers de los places existentes
     console.log(`📌 Agregando ${loadedPlaces.length} marcadores...`);
@@ -142,25 +148,32 @@ export default function CreateEventScreen() {
           }
         });
 
-        marker.addListener('click', () => {
-          // Eliminar marcador anterior
-          if (selectedMarker) {
-            selectedMarker.setMap(null);
-          }
+        markersMap.set(place.id || 0, { marker, place });
 
-          // Crear nuevo marcador para selección
-          selectedMarker = new window.google.maps.Marker({
-            map: googleMap,
-            position: { lat: place.latitude!, lng: place.longitude! },
-            title: place.name,
-            icon: {
+        marker.addListener('click', () => {
+          console.log('✅ Click en marcador existente:', place.name);
+          isMarkerClick = true;
+          
+          // Restaurar marcador anterior al color original
+          if (selectedMarkerRef && selectedMarkerRef.placeId !== place.id) {
+            selectedMarkerRef.marker.setIcon({
               path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 10,
-              fillColor: '#FF6B6B',
-              fillOpacity: 1,
+              scale: 8,
+              fillColor: '#4ECDC4',
+              fillOpacity: 0.8,
               strokeColor: '#fff',
               strokeWeight: 2
-            }
+            });
+          }
+
+          // Cambiar icono del marcador seleccionado
+          marker.setIcon({
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: '#FF6B6B',
+            fillOpacity: 1,
+            strokeColor: '#fff',
+            strokeWeight: 2
           });
 
           setLatitude(place.latitude!);
@@ -171,14 +184,21 @@ export default function CreateEventScreen() {
             lng: place.longitude!,
             placeId: place.id
           });
-          console.log('✅ Place seleccionado:', place.name, place.id);
+
+          selectedMarkerRef = { marker, placeId: place.id };
+          console.log('✅ Ubicación seleccionada:', place.name, place.id);
+          
+          // Resetear la bandera después de un tiempo
+          setTimeout(() => {
+            isMarkerClick = false;
+          }, 100);
         });
       }
     });
 
     // Crear marcador inicial si ya hay ubicación seleccionada
     if (selectedLocation && !selectedLocation.placeId) {
-      selectedMarker = new window.google.maps.Marker({
+      const initialMarker = new window.google.maps.Marker({
         map: googleMap,
         position: { lat: selectedLocation.lat, lng: selectedLocation.lng },
         title: selectedLocation.name,
@@ -191,38 +211,37 @@ export default function CreateEventScreen() {
           strokeWeight: 2
         }
       });
+      selectedMarkerRef = { marker: initialMarker, placeId: null };
     }
 
-    // Click en el mapa para crear nueva ubicación
+    // Click izquierdo en el mapa (en área vacía) para crear nueva ubicación
     googleMap.addListener('click', (event: any) => {
+      // Si se hizo click en un marcador, ignorar
+      if (isMarkerClick) {
+        console.log('ℹ️ Click fue en un marcador, ignorando...');
+        isMarkerClick = false;
+        return;
+      }
+
       const lat = event.latLng.lat();
       const lng = event.latLng.lng();
+      console.log('📍 Click izquierdo en mapa - Crear nueva ubicación', lat, lng);
 
-      // Verificar si el click fue en un marcador existente
-      let clickedOnMarker = false;
-      loadedPlaces.forEach((place) => {
-        if (place.latitude && place.longitude) {
-          const distance = Math.sqrt(
-            Math.pow(lat - place.latitude, 2) + Math.pow(lng - place.longitude, 2)
-          );
-          // Si está dentro de ~0.001 grados (~100 metros), consideramos que clickeó en el marcador
-          if (distance < 0.01) {
-            clickedOnMarker = true;
-          }
-        }
-      });
+      setPendingRightClickLocation({ lat, lng });
+      setShowLocationConfirmModal(true);
+    });
 
-      // Si clickeó en un marcador existente, no hacer nada (ya se manejó con el listener del marcador)
-      if (clickedOnMarker) return;
+    // Click derecho (rightclick) en el mapa para crear nueva ubicación
+    googleMap.addListener('rightclick', (event: any) => {
+      // Prevenir menú de contexto
+      event.preventDefault?.();
 
-      // Si clickeó en un punto vacío, mostrar modal para crear nuevo place
-      setPendingLocation({ lat, lng });
-      setPlaceName('');
-      setPlaceDescription('');
-      setPlaceErrors({});
-      setShowPlaceModal(true);
+      const lat = event.latLng.lat();
+      const lng = event.latLng.lng();
+      console.log('📍 Click derecho en mapa - Crear nueva ubicación', lat, lng);
 
-      console.log('📍 Nueva ubicación - Abriendo modal para ingresar datos del place');
+      setPendingRightClickLocation({ lat, lng });
+      setShowLocationConfirmModal(true);
     });
   };
 
@@ -568,9 +587,6 @@ export default function CreateEventScreen() {
           <View style={styles.selectedLocationCard}>
             <View style={styles.selectedLocationContent}>
               <Text style={styles.selectedLocationName}>{selectedLocation.name}</Text>
-              <Text style={styles.selectedLocationCoords}>
-                Lat: {selectedLocation.lat.toFixed(4)} | Lng: {selectedLocation.lng.toFixed(4)}
-              </Text>
               {selectedLocation.placeId && (
                 <Text style={styles.selectedLocationId}>ID del lugar: {selectedLocation.placeId}</Text>
               )}
@@ -632,13 +648,8 @@ export default function CreateEventScreen() {
               />
               <View style={styles.mapFooter}>
                 <Text style={styles.instructionText}>
-                  Haz click en el mapa para seleccionar una ubicación
+                  Haz click derecho en el mapa para crear una nueva ubicación o haz click izquierdo en un lugar existente
                 </Text>
-                {selectedLocation && (
-                  <Text style={styles.coordinatesText}>
-                    Lat: {selectedLocation.lat.toFixed(4)}, Lng: {selectedLocation.lng.toFixed(4)}
-                  </Text>
-                )}
                 <TouchableOpacity
                   style={[styles.confirmButton, !selectedLocation && styles.disabledButton]}
                   onPress={() => setShowMapModal(false)}
@@ -649,6 +660,46 @@ export default function CreateEventScreen() {
               </View>
             </>
           )}
+        </View>
+      </Modal>
+
+      {/* Location Confirmation Modal */}
+      <Modal visible={showLocationConfirmModal} animationType="fade" transparent={true}>
+        <View style={styles.placeModalOverlay}>
+          <View style={[styles.placeModalContent, styles.confirmLocationModalContent]}>
+            <View style={styles.placeModalHeader}>
+              <Text style={styles.placeModalTitle}>¿Confirmas que esta es la ubicación para el nuevo lugar?</Text>
+            </View>
+
+            <View style={styles.confirmLocationButtons}>
+              <TouchableOpacity
+                style={styles.placeModalCancelButton}
+                onPress={() => {
+                  setShowLocationConfirmModal(false);
+                  setPendingRightClickLocation(null);
+                }}
+              >
+                <Text style={styles.placeModalCancelButtonText}>No</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.placeModalConfirmButton}
+                onPress={() => {
+                  setShowLocationConfirmModal(false);
+                  // Abrir el modal para ingresar datos del lugar
+                  if (pendingRightClickLocation) {
+                    setPendingLocation(pendingRightClickLocation);
+                    setPlaceName('');
+                    setPlaceDescription('');
+                    setPlaceErrors({});
+                    setShowPlaceModal(true);
+                  }
+                }}
+              >
+                <Text style={styles.placeModalConfirmButtonText}>Sí</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -1068,5 +1119,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#666',
     fontWeight: '500'
+  },
+  confirmLocationModalContent: {
+    width: '80%',
+    maxHeight: 'auto'
+  },
+  confirmLocationButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12
   }
 });
