@@ -110,11 +110,18 @@ export const authService = {
     }
   },
 
-  async loginWithGoogle(googleToken: string): Promise<AuthResponse> {
+  async loginWithGoogle(googleData: {
+    email: string;
+    googleToken: string;
+    googleId: string;
+    name?: string;
+    last_name?: string;
+    celular?: number;
+  }): Promise<AuthResponse> {
     try {
       const response = await apiClient.post<any>(
         '/auth/google',
-        { token: googleToken }
+        googleData
       );
       
       // Save token

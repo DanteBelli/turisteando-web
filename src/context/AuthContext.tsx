@@ -21,7 +21,7 @@ interface AuthContextType {
   checkAuth: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
-  loginWithGoogle: (googleToken: string) => Promise<void>;
+  loginWithGoogle: (googleData: any) => Promise<void>;
   setIsForgotPassword: (value: boolean) => void;
   setForgotPasswordStep: (step: 'email' | 'reset') => void;
   setForgotEmail: (email: string) => void;
@@ -225,11 +225,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  const loginWithGoogle = useCallback(async (googleToken: string) => {
+  const loginWithGoogle = useCallback(async (googleData: any) => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await authService.loginWithGoogle(googleToken);
+      const response = await authService.loginWithGoogle(googleData);
       setToken(response.token);
       
       // Fetch user data from API
@@ -239,10 +239,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         setUser({
           id: 0,
-          email: '',
-          name: 'Usuario',
-          last_name: '',
-          celular: 0,
+          email: googleData.email,
+          name: googleData.name || 'Usuario',
+          last_name: googleData.last_name || '',
+          celular: googleData.celular || 0,
           tipo_user: 1,
         } as User);
       }

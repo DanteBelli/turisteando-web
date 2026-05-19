@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { useAuth } from '@/src/context/AuthContext';
+import { getGoogleAuthToken, decodeToken, GoogleUserData, GOOGLE_CLIENT_ID } from '@/src/api/googleAuth';
 
 export default function LoginScreen() {
   const { 
@@ -25,6 +26,11 @@ export default function LoginScreen() {
     resetForgotPasswordForm
   } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
+  const [showGoogleCompleteModal, setShowGoogleCompleteModal] = useState(false);
+  const [googleUserData, setGoogleUserData] = useState<GoogleUserData | null>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [googleLastName, setGoogleLastName] = useState('');
+  const [googleCelular, setGoogleCelular] = useState('');
   
   // Login fields
   const [loginEmail, setLoginEmail] = useState('');
@@ -150,30 +156,116 @@ export default function LoginScreen() {
 
   const handleGoogleLogin = async () => {
     try {
-      // TODO: Implementar Google Sign-In usando expo-auth-session o similar
-      // Por ahora, mostrar un mensaje
-      Alert.alert('En desarrollo', 'La funcionalidad de Google Login se implementará pronto');
+      console.log('🔵 Iniciando Google Auth...');
+      const token = await getGoogleAuthToken();
+
+      if (!token) {
+        console.error('❌ No token received');
+        Alert.alert('Error', 'No se pudo obtener el token de Google');
+        return;
+      }
+
+      // Decodificar el token para obtener datos del usuario
+      const userData = decodeToken(token);
       
-      // Cuando esté implementado:
-      // const googleToken = await getGoogleToken(); // Obtener token de Google
-      // await loginWithGoogle(googleToken);
+      if (!userData) {
+        Alert.alert('Error', 'No se pudo decodificar el token de Google');
+        return;
+      }
+
+      console.log('✅ Datos de Google:', userData.email);
+
+      // Llamar al backend para verificar si el usuario existe
+      try {
+        clearError();
+        console.log('🔍 Verificando si el usuario existe en la BD...');
+        
+        const response = await loginWithGoogle({
+          email: userData.email,
+          googleToken: token,
+          googleId: userData.sub,
+        });
+
+        console.log('✅ Login con Google exitoso');
+        // Si llegamos aquí, el usuario ya existe y está autenticado
+      } catch (err: any) {
+        console.log('❌ Error capturado:', err.response?.status, err.response?.data?.code);
+        
+        // Si el error es 404 (usuario no existe), mostrar modal para completar datos
+        if (err.response?.status === 404 || err.response?.data?.code === 'USER_NOT_FOUND') {
+          console.log('⚠️ Usuario no existe - Pidiendo datos adicionales');
+          clearError(); // Limpiar error antes de mostrar modal
+          setGoogleUserData(userData);
+          setGoogleToken(token);
+          console.log('📋 Sobre de setting modal a true - userData:', userData.email);
+          setShowGoogleCompleteModal(true);
+          console.log('📋 Modal state set to true');
+        } else {
+          const errorMessage = err.response?.data?.error || err.response?.data?.message || 'Error al iniciar sesión con Google';
+          console.error('❌ Error en Google Login:', errorMessage);
+          Alert.alert('Error', errorMessage);
+        }
+      }
     } catch (err: any) {
+      console.error('❌ Error en Google Login:', err);
       const errorMessage = err.message || 'Error al iniciar sesión con Google';
       Alert.alert('Error', errorMessage);
     }
   };
 
+  const handleGoogleLoginError = () => {
+    Alert.alert('Error', 'Error al conectar con Google');
+  };
+
+  const handleGoogleCompleteRegistration = async () => {
+    if (!googleUserData || !googleToken) return;
+
+    if (!googleLastName || !googleCelular) {
+      Alert.alert('Campos requeridos', 'Por favor completa apellido y teléfono');
+      return;
+    }
+
+    try {
+      clearError();
+      console.log('📝 Completando registro de Google...');
+
+      // Llamar al endpoint para crear usuario con Google
+      await loginWithGoogle({
+        email: googleUserData.email,
+        name: googleUserData.given_name,
+        last_name: googleLastName,
+        celular: parseInt(googleCelular),
+        googleId: googleUserData.sub,
+        googleToken: googleToken,
+      });
+
+      console.log('✅ Registro con Google completado');
+      setShowGoogleCompleteModal(false);
+      setGoogleLastName('');
+      setGoogleCelular('');
+      setGoogleToken(null);
+      setGoogleUserData(null);
+      
+      Alert.alert('Éxito', 'Tu cuenta ha sido creada con Google');
+    } catch (err: any) {
+      console.error('❌ Error completando registro:', err);
+      const errorMessage = err.response?.data?.error || 'Error al crear la cuenta';
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Turisteando</Text>
-          <Text style={styles.subtitle}>
-            {isForgotPassword ? 'Recuperar contraseña' : isRegistering ? 'Crear nueva cuenta' : 'Bienvenido'}
-          </Text>
-        </View>
+    <View style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingContainer}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Turisteando</Text>
+            <Text style={styles.subtitle}>
+              {isForgotPassword ? 'Recuperar contraseña' : isRegistering ? 'Crear nueva cuenta' : 'Bienvenido'}
+            </Text>
+          </View>
 
         {isForgotPassword ? (
           // Forgot Password Form
@@ -305,7 +397,7 @@ export default function LoginScreen() {
               />
             </View>
 
-            {error && <Text style={styles.errorText}>{error}</Text>}
+            {error && !showGoogleCompleteModal && <Text style={styles.errorText}>{error}</Text>}
 
             <TouchableOpacity
               style={[styles.button, isLoading && styles.buttonDisabled]}
@@ -337,7 +429,7 @@ export default function LoginScreen() {
               style={[styles.googleButton, isLoading && styles.buttonDisabled]}
               onPress={handleGoogleLogin}
               disabled={isLoading}>
-              <Text style={styles.googleButtonText}>📧 Continuar con Google</Text>
+              <Text style={styles.googleButtonText}>📧 Loguearse con Google</Text>
             </TouchableOpacity>
 
             <View style={styles.divider}>
@@ -450,8 +542,88 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Modal personalizado para completar datos de Google */}
+      {showGoogleCompleteModal && (
+        <TouchableOpacity 
+          style={styles.googleModalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowGoogleCompleteModal(false);
+            setGoogleUserData(null);
+            setGoogleToken(null);
+            setGoogleLastName('');
+            setGoogleCelular('');
+          }}
+        >
+          <View style={styles.googleModalContent}>
+            <Text style={styles.modalTitle}>Completa tu perfil</Text>
+            <Text style={styles.modalSubtitle}>
+              Primera vez con {googleUserData?.email}
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Nombre (automático)</Text>
+              <TextInput
+                style={[styles.input, styles.disabledInput]}
+                value={googleUserData?.given_name || ''}
+                editable={false}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Apellido</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Tu apellido"
+                placeholderTextColor="#999"
+                value={googleLastName}
+                onChangeText={setGoogleLastName}
+                editable={!isLoading}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Teléfono</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="1234567890"
+                placeholderTextColor="#999"
+                keyboardType="number-pad"
+                value={googleCelular}
+                onChangeText={setGoogleCelular}
+                editable={!isLoading}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.button, isLoading && styles.buttonDisabled]}
+              onPress={handleGoogleCompleteRegistration}
+              disabled={isLoading}>
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Completar Registro</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => {
+              setShowGoogleCompleteModal(false);
+              setGoogleUserData(null);
+              setGoogleToken(null);
+              setGoogleLastName('');
+              setGoogleCelular('');
+            }}>
+              <Text style={styles.linkText}>
+                <Text style={styles.linkBold}>Cancelar</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
@@ -459,6 +631,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  keyboardAvoidingContainer: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
@@ -499,6 +674,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: '#f9f9f9',
+  },
+  disabledInput: {
+    backgroundColor: '#e8e8e8',
+    color: '#999',
   },
   button: {
     backgroundColor: '#28A745',
@@ -566,5 +745,60 @@ const styles = StyleSheet.create({
   linkBold: {
     color: '#0066cc',
     fontWeight: 'bold',
+  },
+  // Modal styles - Custom implementation for React Native Web
+  googleModalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+    zIndex: 9999,
+    paddingHorizontal: 0,
+  },
+  googleModalContent: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 30,
+    paddingBottom: 40,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    width: '100%',
+    maxHeight: '80%',
+    minHeight: 300,
+    zIndex: 10000,
+    overflow: 'auto',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 30,
+    paddingBottom: 40,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    minHeight: 300,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 24,
+    textAlign: 'center',
   },
 });

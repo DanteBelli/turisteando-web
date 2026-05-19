@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Auth Callback</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .message {
+            color: #666;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Autenticando...</h1>
+        <div class="spinner"></div>
+        <p class="message">Procesando tu autenticación con Google</p>
+    </div>
+
+    <script>
+        console.log('🔵 auth-callback.html script cargado');
+        console.log('Location:', window.location.href);
+        console.log('Hash:', window.location.hash);
+        console.log('Opener:', window.opener ? 'Tiene ventana padre' : 'SIN ventana padre');
+
+        // Función para extraer el parámetro ID Token de la URL
+        function getIdTokenFromUrl() {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            return params.get('id_token');
+        }
+
+        // Función para extraer el ID Token de la respuesta de Google (en el fragment)
+        function getIdTokenFromFragment() {
+            // Google envía la respuesta en formato: #id_token=...&state=...&session_state=...
+            const fragment = window.location.hash.substring(1);
+            const params = new URLSearchParams(fragment);
+            return params.get('id_token');
+        }
+
+        // Función para enviar el token a la ventana padre
+        function sendTokenToParent(token) {
+            console.log('🔵 sendTokenToParent llamada con token:', token ? 'sí' : 'no');
+            if (token) {
+                console.log('✅ Token encontrado, enviando a ventana padre');
+                if (window.opener) {
+                    console.log('📤 Enviando postMessage...');
+                    window.opener.postMessage({ token }, '*');
+                    console.log('📤 postMessage enviado, cerrando popup...');
+                    window.close();
+                } else {
+                    console.error('❌ Sin ventana padre (window.opener es null)');
+                }
+            } else {
+                console.error('❌ Token no encontrado');
+                if (window.opener) {
+                    console.log('📤 Enviando error a ventana padre...');
+                    window.opener.postMessage({ error: 'No token received from Google' }, '*');
+                    setTimeout(() => window.close(), 2000);
+                } else {
+                    console.error('❌ Sin ventana padre para enviar error');
+                }
+            }
+        }
+
+        // Ejecutar inmediatamente (antes de DOMContentLoaded en caso de que sea muy rápido)
+        console.log('🔍 Buscando token inmediatamente...');
+        const tokenImmediate = getIdTokenFromFragment();
+        if (tokenImmediate) {
+            console.log('✅ Token encontrado inmediatamente:', tokenImmediate.substring(0, 30) + '...');
+            sendTokenToParent(tokenImmediate);
+        }
+
+        // Esperar a que la página cargue completamente
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = getIdTokenFromFragment();
+            console.log('🔍 Buscando token en DOMContentLoaded...');
+            console.log('URL:', window.location.href);
+            console.log('Hash:', window.location.hash);
+            
+            if (token) {
+                console.log('✅ Token encontrado en DOMContentLoaded:', token.substring(0, 30) + '...');
+            } else {
+                console.log('❌ Token NO encontrado en DOMContentLoaded');
+            }
+            
+            sendTokenToParent(token);
+        });
+
+        // También intentar enviar inmediatamente en caso de que DOMContentLoaded ya haya ocurrido
+        window.addEventListener('load', () => {
+            const token = getIdTokenFromFragment();
+            console.log('🔍 Buscando token en load event...');
+            if (token && window.opener) {
+                console.log('✅ Token encontrado en load:', token.substring(0, 30) + '...');
+                window.opener.postMessage({ token }, '*');
+            }
+        });
+
+        // Timeout de seguridad
+        setTimeout(() => {
+            const token = getIdTokenFromFragment();
+            if (!token) {
+                console.error('❌ Timeout: Token aún no encontrado después de 3 segundos');
+                if (window.opener) {
+                    window.opener.postMessage({ error: 'Auth callback timeout - no token in fragment' }, '*');
+                }
+            }
+        }, 3000);
+    </script>
+</body>
+</html>

@@ -297,3 +297,6 @@ MIT
 agregados instalacion
 npx expo install expo-image-picker //para cargar imagen
 npx expo install @react-native-community/datetimepicker //seleccionar fecha
+
+
+npx expo install expo-auth-session expo-web-browser log gmail
